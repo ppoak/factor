@@ -35,12 +35,15 @@ def vector_backtest(
     factor: pd.DataFrame,
     prices: pd.DataFrame,
     span: int | str,
+    code_index: str = "order_book_id",
+    date_index: str = "date",
     buy_col: str = 'close',
     sell_col: str = 'close',
     ngroup: int = 10,
     commision: float = 0.005,
 ):
-    ret = price2ret(prices, span, buy_col, sell_col).loc[factor.index].values
+    ret = price2ret(prices, span, code_index, 
+        date_index, buy_col, sell_col).loc[factor.index].values
     ranks = factor.values.argsort(axis=1)
     num_in_group = int(len(factor.columns) / ngroup)
 
@@ -71,6 +74,8 @@ def event_backtest(
     factor: pd.DataFrame,
     prices: pd.DataFrame,
     span: int | str,
+    code_index: str = 'order_book_id',
+    date_index: str = 'date',
     buy_col: str = 'close',
     sell_col: str = 'close',
     ngroup: int = 10,
@@ -81,5 +86,5 @@ def event_backtest(
     for n in range(ngroup):
         group = (groupers == n).index
         data = pd.concat([prices, group], axis=1)
-        data.groupby()
+        data.groupby(date_index).apply(lambda x: x / x.sum())
 
