@@ -28,7 +28,8 @@ class Factor:
     
     def save(self, name: str):
         self.table.create()
-        factor = self.factor.to_frame(name)
+        factor = self.factor.to_frame(name) if \
+            isinstance(self.factor, pd.Series) else self.factor
         if not self.table.fragments:
             self.table._write_fragment(factor)
         elif not name in self.table.columns:
@@ -46,11 +47,18 @@ class Factor:
         sell_col: str = 'close',
         commision: float = 0.005,
     ):
-        profit, turnover = vector_backtest(
-            self.factor, 
-            price, code_index, date_index, 
-            buy_col, sell_col, ngroup, commision
-        )
+        profit, turnover = {}, {}
+        if isinstance(self.factor, pd.Series):
+            profit[self.name], turnover[self.name] = vector_backtest(
+                self.factor, price, code_index, date_index, 
+                buy_col, sell_col, ngroup, commision
+            )
+        else:
+            for factor in self.factor.columns:
+                profit[factor], turnover[factor] = vector_backtest(
+                    self.factor[factor], price, code_index, date_index,
+                    buy_col, sell_col, ngroup, commision
+                )
         return profit, turnover
     
     def __str__(self):
