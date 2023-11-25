@@ -12,11 +12,18 @@ class Factor:
         self, 
         name: str,
         table: forge.AssetTable,
+        code_index: str = 'order_book_id',
+        date_index: str = "date",
         **datasource,
     ) -> None:
         self.name = name
         self.table = table
-        self.factor = None
+        self.code_index = code_index
+        self.date_index = date_index
+        self.standarized = False
+        self.deextremed = False
+        self.factor: pd.DataFrame | pd.Series = None
+        self.datasource = datasource
         for name, data in datasource.items():
             setattr(self, name, data)
     
@@ -26,6 +33,27 @@ class Factor:
     ):
         raise NotImplementedError
     
+    def deextreme(
+        self,
+        method: str = "std",
+    ):
+        if method == "std":
+            self.factor = self.factor.groupby(self.date_index, group_keys=False).apply(
+                lambda x: x.clip(x.mean() - 3 * x.std(), x.mean() + 3 * x.std()))
+        self.deextremed = True
+        return self
+
+    def standarize(
+        self,
+        method: str = "zscore",
+    ):
+        if method == "zscore":
+            self.factor = self.factor.groupby(self.date_index, group_keys=False).apply(
+                lambda x: (x - x.mean()) / x.std()
+            )
+        self.standarized = True
+        return self
+        
     def save(self, name: str):
         self.table.create()
         factor = self.factor.to_frame(name) if \
@@ -41,8 +69,6 @@ class Factor:
         self,
         price: pd.DataFrame,
         ngroup: int = 10,
-        code_index: str = 'order_book_id',
-        date_index: str = 'date',
         buy_col: str = 'close',
         sell_col: str = 'close',
         commision: float = 0.005,
@@ -50,19 +76,25 @@ class Factor:
         profit, turnover = {}, {}
         if isinstance(self.factor, pd.Series):
             profit[self.name], turnover[self.name] = vector_backtest(
-                self.factor, price, code_index, date_index, 
+                self.factor, price, self.code_index, self.date_index, 
                 buy_col, sell_col, ngroup, commision
             )
         else:
             for factor in self.factor.columns:
                 profit[factor], turnover[factor] = vector_backtest(
-                    self.factor[factor], price, code_index, date_index,
+                    self.factor[factor], price, self.code_index, self.date_index,
                     buy_col, sell_col, ngroup, commision
                 )
         return profit, turnover
     
     def __str__(self):
-        return f'Factor {self.name}'
+        datasource_keys = list(self.datasource.keys())
+        return (
+            f'Factor {self.name}\n'
+            f'\tdata source: {datasource_keys}\n'
+            f'\ttarget table: {self.table}\n'
+            f'\tstandarized: {self.standarized}; deextremed: {self.deextremed}'
+        )
     
     def __repr__(self) -> str:
         return self.__str__()
