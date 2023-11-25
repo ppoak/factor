@@ -38,13 +38,16 @@ def vector_backtest(
         factor = factor.stack()
     elif not isinstance(factor.index, pd.MultiIndex):
         raise ValueError("factor must be a DataFrame or with MultiIndex")
-    groups = factor.groupby(date_index).apply(
-        lambda x: pd.qcut(x, ngroup, label=False)) + 1
+    groups = factor.groupby(date_index, group_keys=False).apply(
+        lambda x: pd.qcut(x, ngroup, labels=False)) + 1
     
     turnover = []
     profit = []
     for n in range(1, ngroup + 1):
         group = groups[groups == n]
+        group = group.groupby(date_index, group_keys=False).apply(
+            lambda x: x / x.sum()
+        )
         relocator = forge.Relocator(price, code_index, date_index, buy_col, sell_col, commision)
         turnover.append(relocator.turnover(group))
         profit.append(relocator.profit(group))
@@ -66,8 +69,8 @@ def event_backtest(
         factor = factor.stack()
     elif not isinstance(factor.index, pd.MultiIndex):
         raise ValueError("factor must be a DataFrame or with MultiIndex")
-    groupers = factor.groupby(level=date_index).apply(
-        lambda x: pd.qcut(x, ngroup, label=False)
+    groupers = factor.groupby(level=date_index, group_keys=False).apply(
+        lambda x: pd.qcut(x, ngroup, labels=False)
     ) + 1
     results = []
     for n in range(ngroup):
