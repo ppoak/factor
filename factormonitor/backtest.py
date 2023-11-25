@@ -1,13 +1,6 @@
 import numpy as np
 import pandas as pd
-import backtrader as bt
 import dataforge as forge
-from .tools import price2ret
-
-
-class RelocateData(bt.feeds.PandasData):
-    lines = ('portfolio', )
-    params = (('portfolio', -1), )
 
 
 class RelocateStrategy(forge.Strategy):
@@ -32,9 +25,8 @@ class RelocateStrategy(forge.Strategy):
 
 
 def vector_backtest(
-    factor: pd.DataFrame,
-    prices: pd.DataFrame,
-    span: int | str,
+    factor: pd.DataFrame | pd.Series,
+    price: pd.DataFrame | pd.Series,
     code_index: str = "order_book_id",
     date_index: str = "date",
     buy_col: str = 'close',
@@ -42,49 +34,46 @@ def vector_backtest(
     ngroup: int = 10,
     commision: float = 0.005,
 ):
-    ret = price2ret(prices, span, code_index, 
-        date_index, buy_col, sell_col).loc[factor.index].values
-    ranks = factor.values.argsort(axis=1)
-    num_in_group = int(len(factor.columns) / ngroup)
-
+    if isinstance(factor, pd.DataFrame) and isinstance(factor.index, pd.MultiIndex):
+        factor = factor.stack()
+    elif not isinstance(factor.index, pd.MultiIndex):
+        raise ValueError("factor must be a DataFrame or with MultiIndex")
+    groups = factor.groupby(date_index).apply(
+        lambda x: pd.qcut(x, ngroup, label=False)) + 1
+    
     turnover = []
-    groupret = []
-    for n in range(ngroup):
-        group = ranks[:, n * num_in_group:(n + 1) * num_in_group]
-        group = np.sort(group, axis=1)
-        turnover.append(np.concatenate([
-            np.full(group.shape[1], np.nan), 
-            (group[1:] - group[:-1] != 0).sum(axis=1) / group.shape[1] / 2
-        ], axis=0))
-
-        indexer = np.repeat(np.arange(group.shape[0]), group.shape[1])
-        groupret.append(
-            np.nanmean(ret[indexer, group.reshape(-1)], axis=1) -
-            commision * turnover
-        )
+    profit = []
+    for n in range(1, ngroup + 1):
+        group = groups[groups == n]
+        relocator = forge.Relocator(price, code_index, date_index, buy_col, sell_col, commision)
+        turnover.append(relocator.turnover(group))
+        profit.append(relocator.profit(group))
     
-    turnover = pd.DataFrame(turnover, index=ret.index, 
-        columns=[f'group{i}' for i in range(ngroup)])
-    groupret = pd.DataFrame(groupret, index=ret.index,
-        columns=[f'group{i}' for i in range(ngroup)])
+    turnover = pd.concat(turnover, axis=1)
+    profit = pd.concat(profit, axis=1)
     
-    return groupret, turnover
+    return profit, turnover
 
 def event_backtest(
     factor: pd.DataFrame,
     prices: pd.DataFrame,
-    span: int | str,
     code_index: str = 'order_book_id',
     date_index: str = 'date',
-    buy_col: str = 'close',
-    sell_col: str = 'close',
     ngroup: int = 10,
     commision: float = 0.005,
 ):
-    factor = factor.stack()
-    groupers = pd.qcut(factor, ngroup, labels=False)
+    if isinstance(factor, pd.DataFrame) and isinstance(factor.index, pd.DatetimeIndex):
+        factor = factor.stack()
+    elif not isinstance(factor.index, pd.MultiIndex):
+        raise ValueError("factor must be a DataFrame or with MultiIndex")
+    groupers = factor.groupby(level=date_index).apply(
+        lambda x: pd.qcut(x, ngroup, label=False)
+    ) + 1
+    results = []
     for n in range(ngroup):
         group = (groupers == n).index
         data = pd.concat([prices, group], axis=1)
-        data.groupby(date_index).apply(lambda x: x / x.sum())
+        backtrader = forge.BackTrader(data, code_index, date_index)
+        results.append(backtrader.run(RelocateStrategy, commision=commision))
 
+    return results
