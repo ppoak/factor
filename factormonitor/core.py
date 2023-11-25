@@ -8,16 +8,16 @@ class Factor:
         self, 
         name: str,
         table: forge.AssetTable,
-        *data: list[pd.Series]
+        **datasource,
     ) -> None:
         self.name = name
         self.table = table
         self.factor = None
+        for name, data in datasource.items():
+            setattr(self, name, data)
     
     def compute(
         self, 
-        start: str = None, 
-        stop: str = None,
         **kwargs,
     ):
         raise NotImplementedError
