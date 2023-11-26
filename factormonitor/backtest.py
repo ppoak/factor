@@ -52,8 +52,9 @@ def vector_backtest(
         turnover.append(relocator.turnover(group))
         profit.append(relocator.profit(group))
     
-    turnover = pd.concat(turnover, axis=1)
-    profit = pd.concat(profit, axis=1)
+    turnover = pd.concat(turnover, axis=1, keys=[f"Group{i}" for i in range(1, ngroup + 1)])
+    profit = pd.concat(profit, axis=1, keys=[f"Group{i}" for i in range(1, ngroup + 1)])
+    profit.iloc[0] = 0
     
     return profit, turnover
 

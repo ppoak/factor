@@ -33,6 +33,20 @@ class Factor:
     ):
         raise NotImplementedError
     
+    def read(
+        self,
+        code: str = None,
+        start: str = None,
+        stop: str = None,
+        **kwargs,
+    ):
+        self.factor = self.table.read(
+            self.name + '_' + '_'.join([f"{key}{value}" for key, value in kwargs.items()]),
+            code = code, start = start, stop = stop,
+        )
+        self.standarized, self.deextremed = True, True
+        return self
+
     def deextreme(
         self,
         method: str = "std",
@@ -53,7 +67,7 @@ class Factor:
             )
         self.standarized = True
         return self
-        
+    
     def save(self, name: str):
         self.table.create()
         factor = self.factor.to_frame(name) if \
@@ -68,21 +82,30 @@ class Factor:
     def vector_backtest(
         self,
         price: pd.DataFrame,
-        ngroup: int = 10,
+        span: int = 20,
+        start: str = None,
+        stop: str = None,
+        ngroup: int = 5,
         buy_col: str = 'close',
         sell_col: str = 'close',
         commision: float = 0.005,
     ):
         profit, turnover = {}, {}
+        reloacte_date = self.factor.index.get_level_values(self.date_index).unique()[::span]
+        relocate_factor = self.factor[
+            (self.factor.index.get_level_values(self.date_index) >= forge.parse_date(start)) &
+            (self.factor.index.get_level_values(self.date_index) <= forge.parse_date(stop)) &
+            self.factor.index.get_level_values(self.date_index).isin(reloacte_date)
+        ]
         if isinstance(self.factor, pd.Series):
             profit[self.name], turnover[self.name] = vector_backtest(
-                self.factor, price, self.code_index, self.date_index, 
+                relocate_factor, price, self.code_index, self.date_index, 
                 buy_col, sell_col, ngroup, commision
             )
         else:
             for factor in self.factor.columns:
                 profit[factor], turnover[factor] = vector_backtest(
-                    self.factor[factor], price, self.code_index, self.date_index,
+                    relocate_factor[factor], price, self.code_index, self.date_index, 
                     buy_col, sell_col, ngroup, commision
                 )
         return profit, turnover
@@ -92,8 +115,8 @@ class Factor:
         return (
             f'Factor {self.name}\n'
             f'\tdata source: {datasource_keys}\n'
-            f'\ttarget table: {self.table}\n'
-            f'\tstandarized: {self.standarized}; deextremed: {self.deextremed}'
+            f'\tstandarized: {self.standarized}; deextremed: {self.deextremed}\n'
+            f'\ttarget table: {self.table}'
         )
     
     def __repr__(self) -> str:
