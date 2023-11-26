@@ -101,18 +101,3 @@ class Std(BackTestFactor):
         self.factor = self.factor.dropna().sort_index()
         return self
 
-
-if __name__ == "__main__":
-    quotesday = forge.AssetTable("/home/data/quotes-day")
-    df = quotesday.read("close, adjfactor, turnover")
-
-    print("-" * 15 + " Computing momentum ... " + "-" * 15)
-    momentum = Momentum(df["close"] * df["adjfactor"])
-    momentum.compute(span=22).deextreme().standarize().save("momentum_span22")
-    print("-" * 15 + " Computing turnover momentum ... " + "-" * 15)
-    turnover_momentum = TurnoverMomentum(df["close"] * df["adjfactor"], df["turnover"])
-    turnover_momentum.compute(span=22).deextreme().standarize().save("turnover_momentum_span22")
-    print("-" * 15 + " Computing std ... " + "-" * 15)
-    std = Std(df["close"] * df["adjfactor"])
-    std.compute(span=22).deextreme().standarize().save("std_span22")
-    
