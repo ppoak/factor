@@ -24,6 +24,20 @@ class BackTestFactor(fm.Factor):
             price, span, start, stop, ngroup, 
             buy_col, sell_col, commision
         )
+    
+    def ic(
+        self, 
+        span: int = 20, 
+        start: str = None, 
+        stop: str = None, 
+        buy_col: str = 'close', 
+        sell_col: str = 'close'
+    ):
+        qdt = forge.AssetTable('/home/data/quotes-day/')
+        start = self.factor.index.get_level_values(self.date_index).min()
+        stop = self.factor.index.get_level_values(self.date_index).max()
+        price = qdt.read('open, high, low, close', start=start, stop=stop)
+        return super().ic(price, span, start, stop, buy_col, sell_col)
 
 
 class Momentum(BackTestFactor):
@@ -73,12 +87,10 @@ if __name__ == "__main__":
     quotesday = forge.AssetTable("/home/data/quotes-day")
     df = quotesday.read("close, adjfactor, turnover")
 
-    # print("-" * 15 + " Computing momentum ... " + "-" * 15)
+    print("-" * 15 + " Computing momentum ... " + "-" * 15)
     momentum = Momentum(df["close"] * df["adjfactor"])
-    momentum.read(start="20200101", stop="20231031", span=22)
-    result = momentum.vector_backtest(span=22)
-    # momentum.compute(span=22).deextreme().standarize().save("momentum_span22")
-    # print("-" * 15 + " Computing turnover momentum ... " + "-" * 15)
-    # turnover_momentum = TurnoverMomentum(df["close"] * df["adjfactor"], df["turnover"])
-    # turnover_momentum.compute(span=22).deextreme().standarize().save("turnover_momentum_span22")
+    momentum.compute(span=22).deextreme().standarize().save("momentum_span22")
+    print("-" * 15 + " Computing turnover momentum ... " + "-" * 15)
+    turnover_momentum = TurnoverMomentum(df["close"] * df["adjfactor"], df["turnover"])
+    turnover_momentum.compute(span=22).deextreme().standarize().save("turnover_momentum_span22")
     

@@ -3,6 +3,7 @@ import dataforge as forge
 from .backtest import (
     vector_backtest,
     event_backtest,
+    ic,
 )
 
 
@@ -78,6 +79,33 @@ class Factor:
             self.table.add(factor)
         else:
             self.table.update(factor)
+
+    def ic(
+        self,
+        price: pd.DataFrame,
+        span: int = 20,
+        start: str = None,
+        stop: str = None,
+        buy_col: str = 'close',
+        sell_col: str = 'close',
+    ):
+        reloacte_date = self.factor.index.get_level_values(self.date_index).unique()[::span]
+        relocate_factor = self.factor[
+            (self.factor.index.get_level_values(self.date_index) >= forge.parse_date(start)) &
+            (self.factor.index.get_level_values(self.date_index) <= forge.parse_date(stop)) &
+            self.factor.index.get_level_values(self.date_index).isin(reloacte_date)
+        ]
+        ics = []     
+        if isinstance(self.factor, pd.Series):
+            ics.append(ic(relocate_factor, price, 
+                self.code_index, self.date_index, buy_col, sell_col))
+
+        elif isinstance(self.factor, pd.DataFrame):
+            for factor in self.factor.columns:
+                ics.append(ic(relocate_factor[factor], price,
+                    self.code_index, self.date_index, buy_col, sell_col))
+        
+        return pd.concat(ics, axis=1, keys=self.factor.columns)
     
     def vector_backtest(
         self,

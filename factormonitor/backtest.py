@@ -24,6 +24,27 @@ class RelocateStrategy(forge.Strategy):
         self.holdings = target
 
 
+def ic(
+    factor: pd.DataFrame | pd.Series,
+    price: pd.DataFrame | pd.Series,
+    code_index: str = "order_book_id",
+    date_index: str = "date",
+    buy_col: str = 'close',
+    sell_col: str = 'close',
+):
+    if isinstance(factor, pd.DataFrame) and isinstance(factor.index, pd.MultiIndex):
+        factor = factor.stack()
+    elif not isinstance(factor.index, pd.MultiIndex):
+        raise ValueError("factor must be a DataFrame or with MultiIndex")
+
+    buy_price = price[buy_col] if isinstance(price, pd.DataFrame) else price
+    sell_price = price[sell_col] if isinstance(price, pd.DataFrame) else price
+    buy_price = buy_price.loc[factor.index]
+    sell_price = sell_price.loc[factor.index].groupby(level=code_index).shift(-1)
+    ret = (sell_price - buy_price) / buy_price
+    ic = factor.groupby(level=date_index).apply(lambda x: x.corr(ret.loc[x.index]))
+    return ic
+
 def vector_backtest(
     factor: pd.DataFrame | pd.Series,
     price: pd.DataFrame | pd.Series,
