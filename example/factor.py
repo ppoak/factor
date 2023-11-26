@@ -83,6 +83,25 @@ class TurnoverMomentum(BackTestFactor):
         return self
 
 
+class Std(BackTestFactor):
+
+    def __init__(self, close: pd.Series):
+        super().__init__(
+            name = 'std',
+            table = forge.AssetTable('/home/data/factor/'),
+            close = close,
+        )
+
+    def compute(
+        self,
+        span: int = 22,
+    ):
+        self.close: pd.Series
+        self.factor = self.close.groupby(level=self.code_index).rolling(span).std()
+        self.factor = self.factor.dropna().sort_index()
+        return self
+
+
 if __name__ == "__main__":
     quotesday = forge.AssetTable("/home/data/quotes-day")
     df = quotesday.read("close, adjfactor, turnover")
@@ -93,4 +112,7 @@ if __name__ == "__main__":
     print("-" * 15 + " Computing turnover momentum ... " + "-" * 15)
     turnover_momentum = TurnoverMomentum(df["close"] * df["adjfactor"], df["turnover"])
     turnover_momentum.compute(span=22).deextreme().standarize().save("turnover_momentum_span22")
+    print("-" * 15 + " Computing std ... " + "-" * 15)
+    std = Std(df["close"] * df["adjfactor"])
+    std.compute(span=22).deextreme().standarize().save("std_span22")
     
