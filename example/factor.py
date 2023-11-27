@@ -75,7 +75,7 @@ class TurnoverMomentum(BackTestFactor):
     ):
         self.turnover: pd.Series; self.close: pd.Series
         ret = self.close / self.close.groupby(level=self.code_index).shift(1) - 1
-        self.factor = ret.groupby(level='order_book_id', group_keys=False).apply(
+        self.factor = ret.groupby(level=self.code_index, group_keys=False).apply(
             lambda x: (x * self.turnover.loc[x.index] + 1)
                 .rolling(span).apply(np.prod) - 1
         )
@@ -97,7 +97,7 @@ class Std(BackTestFactor):
         span: int = 22,
     ):
         self.close: pd.Series
-        self.factor = self.close.groupby(level=self.code_index).rolling(span).std()
+        self.factor = self.close.groupby(level=self.code_index).rolling(span).std().droplevel(0)
         self.factor = self.factor.dropna().sort_index()
         return self
 

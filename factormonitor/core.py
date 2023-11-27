@@ -69,16 +69,28 @@ class Factor:
         self.standarized = True
         return self
     
-    def save(self, name: str):
+    def save(self, **kwargs):
         self.table.create()
+        name = self.name + ('_' + '_'.join([f"{key}{value}" 
+            for key, value in kwargs.items()]) if kwargs else '')
         factor = self.factor.to_frame(name) if \
             isinstance(self.factor, pd.Series) else self.factor
+        
         if not self.table.fragments:
             self.table._write_fragment(factor)
-        elif not name in self.table.columns:
-            self.table.add(factor)
-        else:
-            self.table.update(factor)
+        
+        elif isinstance(self.factor, pd.Series):
+            if name not in self.table.columns:
+                self.table.add(factor)
+            else:
+                self.table.update(factor)
+        
+        elif isinstance(self.factor, pd.DataFrame):
+            incol = self.factor.columns.isin(self.table.columns)
+            if incol.sum() > 0:
+                self.table.update(self.factor[self.factor.columns[incol]])
+            if incol.sum() < len(self.factor.columns):
+                self.table.add(self.factor[self.factor.columns[~incol]])
 
     def ic(
         self,
