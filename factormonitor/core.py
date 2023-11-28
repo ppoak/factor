@@ -117,7 +117,8 @@ class Factor:
                 ics.append(ic(relocate_factor[factor], price,
                     self.code_index, self.date_index, buy_col, sell_col))
         
-        return pd.concat(ics, axis=1, keys=self.factor.columns)
+        return pd.concat(ics, axis=1, keys=self.factor.columns 
+            if isinstance(self.factor, pd.DataFrame) else [self.name])
     
     def vector_backtest(
         self,
