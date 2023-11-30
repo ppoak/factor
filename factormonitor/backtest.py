@@ -1,9 +1,9 @@
+import quool
 import numpy as np
 import pandas as pd
-import dataforge as forge
 
 
-class RelocateStrategy(forge.Strategy):
+class RelocateStrategy(quool.Strategy):
 
     params = (("ratio", 0.95), )
 
@@ -69,7 +69,7 @@ def vector_backtest(
         group = group.groupby(date_index, group_keys=False).apply(
             lambda x: x / x.sum()
         )
-        relocator = forge.Relocator(price, code_index, date_index, buy_col, sell_col, commision)
+        relocator = quool.Relocator(price, code_index, date_index, buy_col, sell_col, commision)
         turnover.append(relocator.turnover(group))
         profit.append(relocator.profit(group))
     
@@ -98,7 +98,7 @@ def event_backtest(
     for n in range(ngroup):
         group = (groupers == n).index
         data = pd.concat([prices, group], axis=1)
-        backtrader = forge.BackTrader(data, code_index, date_index)
+        backtrader = quool.BackTrader(data, code_index, date_index)
         results.append(backtrader.run(RelocateStrategy, commision=commision))
 
     return results

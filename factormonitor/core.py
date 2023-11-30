@@ -1,5 +1,5 @@
+import quool
 import pandas as pd
-import dataforge as forge
 from .backtest import (
     vector_backtest,
     event_backtest,
@@ -12,7 +12,7 @@ class Factor:
     def __init__(
         self, 
         name: str,
-        table: forge.AssetTable,
+        table: quool.AssetTable,
         code_index: str = 'order_book_id',
         date_index: str = "date",
         **datasource,
@@ -103,8 +103,8 @@ class Factor:
     ):
         reloacte_date = self.factor.index.get_level_values(self.date_index).unique()[::span]
         relocate_factor = self.factor[
-            (self.factor.index.get_level_values(self.date_index) >= forge.parse_date(start)) &
-            (self.factor.index.get_level_values(self.date_index) <= forge.parse_date(stop)) &
+            (self.factor.index.get_level_values(self.date_index) >= quool.parse_date(start)) &
+            (self.factor.index.get_level_values(self.date_index) <= quool.parse_date(stop)) &
             self.factor.index.get_level_values(self.date_index).isin(reloacte_date)
         ]
         ics = []     
@@ -134,8 +134,8 @@ class Factor:
         profit, turnover = {}, {}
         reloacte_date = self.factor.index.get_level_values(self.date_index).unique()[::span]
         relocate_factor = self.factor[
-            (self.factor.index.get_level_values(self.date_index) >= forge.parse_date(start)) &
-            (self.factor.index.get_level_values(self.date_index) <= forge.parse_date(stop)) &
+            (self.factor.index.get_level_values(self.date_index) >= quool.parse_date(start)) &
+            (self.factor.index.get_level_values(self.date_index) <= quool.parse_date(stop)) &
             self.factor.index.get_level_values(self.date_index).isin(reloacte_date)
         ]
         if isinstance(self.factor, pd.Series):

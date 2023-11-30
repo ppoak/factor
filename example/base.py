@@ -1,4 +1,4 @@
-import dataforge as forge
+import quool
 import factormonitor as fm
 
 
@@ -14,7 +14,7 @@ class BackTestFactor(fm.Factor):
         sell_col: str = 'close', 
         commision: float = 0.005
     ):
-        qdt = forge.AssetTable('/home/data/quotes-day/')
+        qdt = quool.AssetTable('/home/data/quotes-day/')
         start = self.factor.index.get_level_values(self.date_index).min()
         stop = self.factor.index.get_level_values(self.date_index).max()
         price = qdt.read('open, high, low, close, volume', start=start, stop=stop)
@@ -31,7 +31,7 @@ class BackTestFactor(fm.Factor):
         buy_col: str = 'close', 
         sell_col: str = 'close'
     ):
-        qdt = forge.AssetTable('/home/data/quotes-day/')
+        qdt = quool.AssetTable('/home/data/quotes-day/')
         start = self.factor.index.get_level_values(self.date_index).min()
         stop = self.factor.index.get_level_values(self.date_index).max()
         price = qdt.read('open, high, low, close', start=start, stop=stop)
