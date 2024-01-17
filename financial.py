@@ -7,19 +7,18 @@ This script is used to compute financial factors:
 """
 
 # %% here is to import some packages
-import quool.database as db
-import numpy as np
+from quool.table import PanelTable
 
 # %% here is to create some interfaces
 start = "20000101"
-stop = "20231231"
+stop = None
 
 date_level = 'date'
 code_level = 'order_book_id'
 
-qtd = db.PanelTable("/home/data/quotes-day", date_level=date_level, code_level=code_level)
-fin = db.PanelTable("/home/data/financial", date_level=date_level, code_level=code_level)
-fctdev = db.PanelTable("/home/data/factordev", date_level=date_level, code_level=code_level)
+qtd = PanelTable("/home/data/quotes-day", date_level=date_level, code_level=code_level)
+fin = PanelTable("/home/data/financial", date_level=date_level, code_level=code_level)
+fctdev = PanelTable("/home/data/factordev", date_level=date_level, code_level=code_level)
 
 # %% here is to read some basic data
 qtddata = qtd.read('close', start=start, stop=stop)
