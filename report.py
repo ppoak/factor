@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 # factor analyzing parameters
 name = 'size' # factorr name
 uri = '/home/data/factordev' # factor database uri
-start = '20230630' # backtest start
+start = '20230101' # backtest start
 stop = '20231231' # backtest stop
 pool = None # backtest pool
 delay = 1 # the delayed days to execute buy
@@ -27,6 +27,7 @@ crossdate = 0 # this should be a trading day
 infor_coef_test = True # whether to perform information coeffiency test
 ngroup_test = True # whether to perform group test
 ngroup = 10 # how many groups to divide
+longshort_test = True # under development
 topk_test = True # under development
 topk = 100 # under development
 commission = 0.005 # commission used in group test
@@ -82,14 +83,14 @@ if cross_section_test:
     crossdata = factor.loc[crossdate]
     crossreturn = future_return.loc[crossdate]
     crossdata = pd.concat([crossdata, crossreturn], axis=1, keys=[name, 'future return'])
-    crossdata.iloc[:, 0].plot.hist(bins=300, ax=axeslist.pop(0), title=f'{name} distribution')
+    crossdata.iloc[:, 0].plot.hist(bins=300, ax=axeslist.pop(0), title=f'distribution')
     crossdata.plot.scatter(x=crossdata.columns[0], y=crossdata.columns[1], 
         ax=axeslist.pop(0), title=f"{crossdate}")
-    crossdata.to_excel(writer, sheet_name=f'{name} cross-section')
+    crossdata.to_excel(writer, sheet_name=f'cross-section')
 
 if infor_coef_test:
     inforcoef = factor.corrwith(future_return, axis=1).dropna()
-    inforcoef.name = f"infocoef {name}"
+    inforcoef.name = f"infocoef"
     ax = inforcoef.plot.bar(ax=axeslist.pop(0), title=inforcoef.name)
     ax.set_xticks([i for i in range(0, inforcoef.shape[0], inforcoef.shape[0] // 10)], 
         [inforcoef.index[i].strftime(r'%Y-%m-%d') for i in range(0, inforcoef.shape[0], inforcoef.shape[0] // 10)])
@@ -132,18 +133,41 @@ if ngroup_test:
     if benchmark is not None:
         excumprofit = (exprofit + 1).cumprod()
     
-    cumprofit.plot(ax=axeslist.pop(0), title=f'cumulative netvalue {name}')
+    cumprofit.plot(ax=axeslist.pop(0), title=f'cumulative netvalue')
     if benchmark is not None:
-        excumprofit.plot(ax=axeslist.pop(0), title=f'execess cumulative netvalue {name}')
-    turnover.plot(ax=axeslist.pop(0), title=f'turnover {name}')
+        excumprofit.plot(ax=axeslist.pop(0), title=f'execess cumulative netvalue')
+    turnover.plot(ax=axeslist.pop(0), title=f'turnover')
     
-    profit.to_excel(writer, sheet_name=f'profit {name}')
-    cumprofit.to_excel(writer, sheet_name=f'cumprofit {name}')
+    profit.to_excel(writer, sheet_name=f'profit')
+    cumprofit.to_excel(writer, sheet_name=f'cumprofit')
     if benchmark is not None:
-        excumprofit.to_excel(writer, sheet_name=f'excumprofit {name}')
-    turnover.to_excel(writer, sheet_name=f'turnover {name}')
+        excumprofit.to_excel(writer, sheet_name=f'excumprofit')
+    turnover.to_excel(writer, sheet_name=f'turnover')
 
 fig.tight_layout()
 fig.savefig(str(result_path / expname) + '.png')
+
+abstract = pd.Series(
+    {
+        "name": name,
+        "start": start,
+        "stop": stop,
+        "pool": pool,
+        "commission": commission,
+        "ngroup": ngroup,
+    }
+)
+if cross_section_test:
+    abstract["cross_section_skew"] = crossdata[name].skew()
+    abstract["cross_section_kurtosis"] = crossdata[name].kurtosis()
+if infor_coef_test:
+    abstract["infor_coef_mean"] = inforcoef.mean()
+    abstract["infor_coef_tvalue"] = inforcoef.mean() / inforcoef.std()
+if ngroup_test:
+    abstract = pd.concat([abstract, 100 * (cumprofit.iloc[-1, :] - 1).add_suffix("_return(%)")], axis=0)
+    abstract = pd.concat([abstract, 100 * turnover.mean().add_suffix("_turnover(%)")], axis=0)
+abstract.index.name = "INDICATORS"
+abstract.name = "ABSTRACT"
+abstract.to_excel(writer, sheet_name=f'ABSTRACT')
 
 writer.close()
