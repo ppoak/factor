@@ -7,14 +7,14 @@ from quool.table import PanelTable
 from joblib import Parallel, delayed
 
 
-# factor analyzing parameters
-name = 'size' # factorr name
-uri = '/home/data/factordev' # factor database uri
+# %% factor analyzing parameters
+name = 'momentum20' # factorr name
+uri = '/home/data/barra' # factor database uri
 start = '20230101' # backtest start
 stop = None # backtest stop
-pool = None # backtest pool
+pool = '399101.XSHE' # backtest pool
 delay = 1 # the delayed days to execute buy
-rebalance = 1 # rebalance day
+rebalance = 5 # rebalance day
 buyon = "open" # the buy price to compute future return
 sellon = "open" # the sell price to compute future return
 preprocess = True # whether to preprocess the factor data
@@ -29,12 +29,12 @@ ngroup_test = True # whether to perform group test
 ngroup = 10 # how many groups to divide
 longshort_test = True # under development
 topk_test = True # under development
-topk = 100 # under development
+topk = 10 # under development
 commission = 0.005 # commission used in group test
 n_jobs = 1 # how many cpus to use in layering test
 
 
-# computing parameters from parameters
+# %% computing parameters from parameters
 today = datetime.datetime.today().strftime(r'%Y%m%d')
 stop = stop or today
 directory = f'{name}'
@@ -42,12 +42,12 @@ expname = f'{name}-{start}-{stop}-{pool}-{rebalance}-{(1 - preprocess) * "no"}pr
 result_path = Path(result_path).joinpath(directory).expanduser().resolve()
 result_path.mkdir(exist_ok=True, parents=True)
 
-# data interfaces
+# %% data interfaces
 qtd = PanelTable('/home/data/quotes-day')
 idx = PanelTable('/home/data/index-weights/')
 idxqtd = PanelTable('/home/data/index-quotes-day')
 
-# useful functions
+# %% useful functions
 def reweight(
     weight: pd.DataFrame, 
     future_return_1d: pd.DataFrame, 
@@ -65,7 +65,7 @@ def reweight(
     returns -= comm * turnover
     return pd.concat([returns, turnover], axis=1, keys=['returns', 'turnover']).fillna(0)
 
-# reading data
+# %% reading data
 fct = PanelTable(uri)
 code = None
 if pool is not None:
@@ -76,14 +76,14 @@ price = data.iloc[:, :4].where(~stsus, axis=0)
 price = price.mul(data['adjfactor'], axis=0)
 factor = fct.read(name, code=code, start=start, stop=stop).iloc[:, 0]
 
-# format data
+# %% format data
 future_return = price[sellon].unstack(level=code_level).shift(-rebalance - 1) / \
     price[buyon].unstack(level=code_level).shift(-delay) - 1
 future_return_1d = price[sellon].unstack(level=code_level).shift(-2) / \
         price[buyon].unstack(level=code_level).shift(-1) - 1
 factor = factor.unstack(level=code_level).iloc[::rebalance, :]
 
-# preprocess data for backtest
+# %% preprocess data for backtest
 if preprocess:
     median = factor.median(axis=1)
     ad = factor.sub(median, axis=0)
@@ -93,7 +93,7 @@ if preprocess:
     factor = factor.clip(thresh_down, thresh_up, axis=0).where(~factor.isna())
     factor = factor.sub(factor.mean(axis=1), axis=0).div(factor.std(axis=1), axis=0)
 
-# prepare images and data path
+# %% prepare images and data path
 numfigs = cross_section_test * 2 + infor_coef_test + ngroup_test * 2 + \
     (pool is not None) + longshort_test + topk_test
 fig, axes = plt.subplots(nrows=numfigs, ncols=1, figsize=(20, 10 * numfigs))
@@ -102,7 +102,7 @@ if numfigs == 1:
 axeslist = axes.tolist()
 writer = pd.ExcelWriter(str(result_path / expname) + '.xlsx')
 
-# create a sheet for abstract
+# %% create a sheet for abstract
 abstract = pd.Series(
     {
         "name": name,
@@ -136,7 +136,7 @@ if infor_coef_test:
         [inforcoef.index[i].strftime(r'%Y-%m-%d') for i in range(0, inforcoef.shape[0], inforcoef.shape[0] // 10)])
     inforcoef.to_excel(writer, sheet_name=inforcoef.name)
 
-# perform ngroup test
+# %% perform ngroup test
 if ngroup_test:
     benchmark = None
     if pool is not None:
@@ -171,7 +171,7 @@ if ngroup_test:
         excumprofit.to_excel(writer, sheet_name=f'excumprofit')
     turnover.to_excel(writer, sheet_name=f'turnover')
 
-# perform longshort test
+# %% perform longshort test
 if longshort_test:
     longshort_profit = (profit[f'group{ngroup}'] - profit['group1']) * np.sign(inforcoef.mean())
     longshort_cumprofit = (longshort_profit + 1).cumprod()
@@ -179,7 +179,7 @@ if longshort_test:
     longshort_cumprofit.plot(ax=axeslist.pop(0), title=f'longshort')
     longshort_profit.to_excel(writer, sheet_name=f'longshort')
 
-# perform topk test
+# %% perform topk test
 if topk_test:
     benchmark = None
     if pool is not None:
@@ -196,7 +196,7 @@ if topk_test:
     topk_result.plot(ax=axeslist.pop(0), title=f'top{topk}', secondary_y=['turnover'])
     topk_result.to_excel(writer, sheet_name=f'top{topk}')
 
-
+# %% conclude the result
 fig.tight_layout()
 fig.savefig(str(result_path / expname) + '.png')
 
