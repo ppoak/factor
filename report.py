@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+from quool.backtrade import rebalance_weight
 from quool.table import PanelTable
 from joblib import Parallel, delayed
 
@@ -31,15 +32,14 @@ longshort_test = True # under development
 topk_test = True # under development
 topk = 10 # under development
 commission = 0.005 # commission used in group test
-n_jobs = 1 # how many cpus to use in layering test
+n_jobs = -1 # how many cpus to use in layering test
 
 
 # %% computing parameters from parameters
 today = datetime.datetime.today().strftime(r'%Y%m%d')
 stop = stop or today
-directory = f'{name}'
 expname = f'{name}-{start}-{stop}-{pool}-{rebalance}-{(1 - preprocess) * "no"}preprocess'
-result_path = Path(result_path).joinpath(directory).expanduser().resolve()
+result_path = Path(result_path).joinpath(name).expanduser().resolve()
 result_path.mkdir(exist_ok=True, parents=True)
 
 # %% data interfaces
@@ -47,41 +47,20 @@ qtd = PanelTable('/home/data/quotes-day')
 idx = PanelTable('/home/data/index-weights/')
 idxqtd = PanelTable('/home/data/index-quotes-day')
 
-# %% useful functions
-def reweight(
-    weight: pd.DataFrame, 
-    future_return_1d: pd.DataFrame, 
-    delay: int,
-    rebalance: int,
-    comm: float,
-):
-    weight = weight.div(weight.sum(axis=1), axis=0)
-    delta = weight.fillna(0) - weight.shift(1).fillna(0)
-    turnover = delta.abs().sum(axis=1) / 2
-    turnover = turnover.reindex(future_return_1d.index).shift(delay).fillna(0)
-    weight = weight.fillna(0).reindex(future_return_1d.index).ffill()
-    returns = future_return_1d * weight
-    returns = returns.sum(axis=1).shift(delay + rebalance).fillna(0)
-    returns -= comm * turnover
-    return pd.concat([returns, turnover], axis=1, keys=['returns', 'turnover']).fillna(0)
-
 # %% reading data
 fct = PanelTable(uri)
 code = None
 if pool is not None:
     code = idx.read(pool, start=start, stop=stop).dropna().index.get_level_values(code_level).unique()
-data = qtd.read("open, high, low, close, volume, st, suspended, adjfactor", code=code, start=start, stop=stop)
-stsus = (data['st'] | data['suspended']).replace(np.nan, True).astype("bool")
-price = data.iloc[:, :4].where(~stsus, axis=0)
-price = price.mul(data['adjfactor'], axis=0)
+qtddata = qtd.read("open, high, low, close, volume, st, suspended, adjfactor", code=code, start=start, stop=stop)
+stsus = (qtddata['st'] | qtddata['suspended']).replace(np.nan, True).astype("bool")
+data = qtddata.iloc[:, :4].where(~stsus, axis=0)
+data = data.mul(qtddata['adjfactor'], axis=0)
 factor = fct.read(name, code=code, start=start, stop=stop).iloc[:, 0]
 
 # %% format data
-future_return = price[sellon].unstack(level=code_level).shift(-rebalance - 1) / \
-    price[buyon].unstack(level=code_level).shift(-delay) - 1
-future_return_1d = price[sellon].unstack(level=code_level).shift(-2) / \
-        price[buyon].unstack(level=code_level).shift(-1) - 1
 factor = factor.unstack(level=code_level).iloc[::rebalance, :]
+price = data['open'].unstack(level=code_level)
 
 # %% preprocess data for backtest
 if preprocess:
@@ -121,15 +100,17 @@ if cross_section_test:
     if isinstance(crossdate, int):
         crossdate = factor.index[crossdate].strftime(r'%Y%m%d')
     crossdata = factor.loc[crossdate]
-    crossreturn = future_return.loc[crossdate]
-    crossdata = pd.concat([crossdata, crossreturn], axis=1, keys=[name, 'future return'])
+    returns = price.shift(-delay - rebalance) / price.shift(-delay) - 1
+    crossdata = pd.concat([crossdata, returns.loc[crossdate]], axis=1, keys=[name, 'future return'])
     crossdata.iloc[:, 0].plot.hist(bins=300, ax=axeslist.pop(0), title=f'distribution')
     crossdata.plot.scatter(x=crossdata.columns[0], y=crossdata.columns[1], 
         ax=axeslist.pop(0), title=f"{crossdate}")
     crossdata.to_excel(writer, sheet_name=f'cross-section')
 
 if infor_coef_test:
-    inforcoef = factor.corrwith(future_return, axis=1).dropna()
+    inforcoef = factor.corrwith(
+        price.shift(-delay - rebalance) / price.shift(-delay) - 1,
+        axis=1).dropna()
     inforcoef.name = f"infocoef"
     ax = inforcoef.plot.bar(ax=axeslist.pop(0), title=inforcoef.name)
     ax.set_xticks([i for i in range(0, inforcoef.shape[0], inforcoef.shape[0] // 10)], 
@@ -141,17 +122,17 @@ if ngroup_test:
     benchmark = None
     if pool is not None:
         benchmark = idxqtd.read('close', code=pool, start=start, stop=stop)
-        benchmark = benchmark.iloc[:, 0].unstack(level=code_level).pct_change().fillna(0)
+        benchmark = benchmark.iloc[:, 0].unstack(level=code_level)
     groups = factor.apply(lambda x: pd.qcut(x, q=ngroup, labels=False), axis=1) + 1
     result = Parallel(n_jobs=n_jobs, backend='loky')(
-        delayed(reweight)(
-            groups.where(groups == i), future_return_1d, delay, rebalance, commission
+        delayed(rebalance_weight)(
+            groups.where(groups == i), price, delay, 'both', commission, benchmark.iloc[:, 0]
     ) for i in range(1, ngroup + 1))
-    profit = pd.concat([res["returns"] for res in result], axis=1,
-        keys=range(1, ngroup + 1)).add_prefix('group')
-    turnover = pd.concat([res["turnover"] for res in result], axis=1,
-        keys=range(1, ngroup + 1)).add_prefix('group')
+    evaluation = pd.concat([res[0] for res in result], axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
+    profit = pd.concat([res[1] for res in result], axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
+    turnover = pd.concat([res[2] for res in result], axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
 
+    benchmark = benchmark.pct_change().fillna(0)
     if benchmark is not None:
         exprofit = profit.sub(benchmark.iloc[:, 0], axis=0)
         profit = pd.concat([profit, benchmark], axis=1)
@@ -160,41 +141,43 @@ if ngroup_test:
     if benchmark is not None:
         excumprofit = (exprofit + 1).cumprod()
     
+    evaluation.to_excel(writer, sheet_name=f'evaluation')
+
     cumprofit.plot(ax=axeslist.pop(0), title=f'cumulative netvalue')
     if benchmark is not None:
         excumprofit.plot(ax=axeslist.pop(0), title=f'execess cumulative netvalue')
     turnover.plot(ax=axeslist.pop(0), title=f'turnover')
     
-    profit.to_excel(writer, sheet_name=f'profit')
-    cumprofit.to_excel(writer, sheet_name=f'cumprofit')
+    cumprofit.to_excel(writer, sheet_name=f'ngroup netvalue')
     if benchmark is not None:
-        excumprofit.to_excel(writer, sheet_name=f'excumprofit')
+        excumprofit.to_excel(writer, sheet_name=f'excess ngroup netvalue')
     turnover.to_excel(writer, sheet_name=f'turnover')
 
 # %% perform longshort test
 if longshort_test:
     longshort_profit = (profit[f'group{ngroup}'] - profit['group1']) * np.sign(inforcoef.mean())
     longshort_cumprofit = (longshort_profit + 1).cumprod()
-    longshort_profit.name = "longshort"
+    longshort_cumprofit.name = "longshort value"
     longshort_cumprofit.plot(ax=axeslist.pop(0), title=f'longshort')
-    longshort_profit.to_excel(writer, sheet_name=f'longshort')
+    longshort_cumprofit.to_excel(writer, sheet_name=f'longshort value')
 
 # %% perform topk test
 if topk_test:
     benchmark = None
     if pool is not None:
         benchmark = idxqtd.read('close', code=pool, start=start, stop=stop)
-        benchmark = benchmark.iloc[:, 0].unstack(level=code_level).pct_change().fillna(0)
+        benchmark = benchmark.iloc[:, 0].unstack(level=code_level)
     
     selected = factor.rank(axis=1) * -np.sign(inforcoef.mean()) <= topk
     top = factor.mask(selected, 1).mask(~selected, 0)
-    topk_result = reweight(top, future_return_1d, delay, rebalance, commission)
+    topk_eval, topk_returns, topk_turnover = rebalance_weight(top, price, delay, 'both', commission, benchmark.iloc[:, 0])
     if benchmark is not None:
-        topk_result = pd.concat([topk_result, benchmark], axis=1)
-    no_turnover_col = topk_result.columns[~topk_result.columns.str.contains('turnover')]
-    topk_result.loc[:, no_turnover_col] = (topk_result.loc[:, no_turnover_col] + 1).cumprod()
-    topk_result.plot(ax=axeslist.pop(0), title=f'top{topk}', secondary_y=['turnover'])
-    topk_result.to_excel(writer, sheet_name=f'top{topk}')
+        topk_returns = pd.concat([topk_returns, benchmark.pct_change().fillna(0)], axis=1)
+    topk_value = (topk_returns + 1).cumprod()
+    pd.concat([topk_value, topk_turnover], axis=1).plot(
+        ax=axeslist.pop(0), title=f'top{topk}', secondary_y=['turnover'])
+    topk_eval.to_excel(writer, sheet_name=f'top{topk} evaluation')
+    topk_value.to_excel(writer, sheet_name=f'top{topk} value')
 
 # %% conclude the result
 fig.tight_layout()
@@ -204,7 +187,7 @@ if cross_section_test:
     abstract["cross_section_skew"] = crossdata[name].skew()
     abstract["cross_section_kurtosis"] = crossdata[name].kurtosis()
 if infor_coef_test:
-    abstract["infor_coef_mean"] = inforcoef.mean()
+    abstract["infor_coef_mean(%)"] = inforcoef.mean() * 100
     abstract["infor_coef_tvalue"] = inforcoef.mean() / inforcoef.std()
 if ngroup_test:
     abstract = pd.concat([abstract, 100 * (cumprofit.iloc[-1, :] - 1).add_suffix("_return(%)")], axis=0)
@@ -212,7 +195,7 @@ if ngroup_test:
 if longshort_test:
     abstract["longshort_return(%)"] = 100 * (longshort_cumprofit.iloc[-1] - 1)
 if topk_test:
-    abstract["topk_return(%)"] = 100 * (topk_result["returns"].iloc[-1] - 1)
+    abstract["topk_return(%)"] = 100 * ((topk_returns["return"] + 1).cumprod().iloc[-1] - 1)
 
 abstract.index.name = "INDICATORS"
 abstract.name = "ABSTRACT"
