@@ -35,4 +35,4 @@ tailvolume3min = pd.concat(tailvolume3min, axis=0, keys=computing_days).reorder_
 
 # %% 
 tailvolume3min.name = 'tailvolume3min'
-fctdev.add(tailvolume3min) if 'tailvolume3min' in fctdev.columns else fctdev.add(tailvolume3min)
+fctdev.update(tailvolume3min) if 'tailvolume3min' in fctdev.columns else fctdev.add(tailvolume3min)
