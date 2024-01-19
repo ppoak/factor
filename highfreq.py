@@ -26,7 +26,7 @@ trading_days = qtd.read('close', code='000001.XSHE').index.get_level_values('dat
 @delayed
 def _get_tailvolume(_cpd):
     _data = qtm.read('volume', start=_cpd, stop=_cpd + pd.Timedelta(days=1)).iloc[:, 0]
-    _factor = _data.unstack(level='order_book_id').between_time("14:57", "15:00").sum(axis=0)
+    _factor = _data.unstack(level='order_book_id').between_time("14:30", "15:00").sum(axis=0)
     return _factor
 
 computing_days = trading_days[4359:]
@@ -34,5 +34,5 @@ tailvolume3min = Parallel(n_jobs=-1, backend='loky')(_get_tailvolume(cpd) for cp
 tailvolume3min = pd.concat(tailvolume3min, axis=0, keys=computing_days).reorder_levels(['order_book_id', 'date'])
 
 # %% 
-tailvolume3min.name = 'tailvolume3min'
+tailvolume3min.name = 'tailvolume30min'
 fctdev.update(tailvolume3min) if 'tailvolume3min' in fctdev.columns else fctdev.add(tailvolume3min)
