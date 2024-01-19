@@ -1,10 +1,11 @@
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 import quool
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from collections import namedtuple
 from joblib import Parallel, delayed
 
 
@@ -229,3 +230,13 @@ def perform_backtest(
             if benchmark is not None:
                 ngroup_exvalue.to_excel(writer, sheet_name=ngroup_exreturns.name)
                 topk_exvalue.to_excel(writer, sheet_name=topk_exreturns.name)
+
+    return namedtuple('BacktestReturn', [
+        'ngroup_evaluation', 'ngroup_returns', 'ngroup_value', 'ngroup_turnover',
+        'topk_evaluation', 'topk_returns', 'topk_value', 'topk_turnover',
+        'longshort_returns', 'longshort_value',
+    ])(
+        ngroup_evaluation, ngroup_returns, ngroup_value, ngroup_turnover,
+        topk_evaluation, topk_returns, topk_value, topk_turnover,
+        longshort_returns, longshort_value,
+    )
