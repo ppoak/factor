@@ -1,4 +1,4 @@
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 import quool
@@ -9,55 +9,92 @@ from collections import namedtuple
 from joblib import Parallel, delayed
 
 
+def get_data(
+    uri: str,
+    field: str | list,
+    code: str | list | pd.MultiIndex = None,
+    start: str | pd.Timestamp = None,
+    stop: str | pd.Timestamp = None,
+    dropna: bool = False,
+    frame: bool = True,
+    code_level: str | int = 0,
+    date_level: str | int = 1,
+):
+    table = quool.PanelTable(uri, code_level=code_level, date_level=date_level)
+    field = quool.parse_commastr(field)
+    if isinstance(code, pd.MultiIndex):
+        code = code.get_level_values(code_level)
+    data = table.read(field, code=code, start=start, stop=stop)
+    result = {}
+    for f in field:
+        _dat = data[f]
+        if dropna:
+            _dat = _dat.dropna()
+        if isinstance(code, pd.MultiIndex):
+            _dat = _dat.loc[_dat.index.intersection(code)]
+        if frame:
+            result[f] = _dat.unstack(level=code_level)
+        else:
+            result[f] = _dat
+    return result
+
 def get_pool(
     uri: str,
     name: str,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
+    code_level: int | str = 0,
+    date_level: int | str = 1,
 ) -> pd.MultiIndex:
-    pool_table = quool.PanelTable(uri)
-    pool_data = pool_table.read(name, 
-        start=start, stop=stop).dropna().index
-    return pool_data
+    pool = get_data(
+        uri, name, code=None, 
+        start=start, stop=stop,
+        dropna=True, frame=False,
+        code_level=code_level, 
+        date_level=date_level,
+    )
+    return pool[name].index
 
 def get_factor(
     uri: str, 
     name: str,
-    pool: pd.MultiIndex = None,
+    pool: str | list | pd.MultiIndex = None,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
-    code_level: int | str = 1,
+    code_level: int | str = 0,
+    date_level: int | str = 1,
 ) -> pd.DataFrame:
-    factor_table = quool.PanelTable(uri)
-    code = None
-    if pool is not None:
-        code = pool.get_level_values(level=code_level).unique()
-    factor_data = factor_table.read(name, 
-        start=start, stop=stop, code=code).iloc[:, 0]
-    if pool is not None:
-        factor_data = factor_data.loc[
-            factor_data.index.intersection(pool)]
-    return factor_data.unstack(level=code_level)
+    return get_data(uri=uri, field=name, code=pool,
+        start=start, stop=stop, dropna=False, frame=True, 
+        code_level=code_level, date_level=date_level
+    )[name]
 
 def get_price(
     uri: str,
     name: str,
-    pool: pd.MultiIndex = None,
+    pool: str | list | pd.MultiIndex = None,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
-    code_level: int | str = 1,
+    filter: bool = True,
+    adjust: bool = True,
+    code_level: int | str = 0,
+    date_level: int | str = 1,
 ) -> pd.DataFrame:
-    price_table = quool.PanelTable(uri)
-    code = None
-    if pool is not None:
-        code = pool.get_level_values(level=code_level).unique()
-    price_data = price_table.read(f'{name}, adjfactor, st, suspended',
-        start=start, stop=stop, code=code)
-    stsus = (price_data['st'] | price_data['suspended']).replace(np.nan, True)
-    price = price_data[name].where(~stsus) * price_data['adjfactor']
-    if pool is not None:
-        price = price.loc[price.index.intersection(pool)]
-    return price.unstack(level=code_level)
+    names = quool.parse_commastr(name)
+    if filter:
+        names += ["st", "suspended"]
+    if adjust:
+        names += ["adjfactor"]
+    data = get_data(uri=uri, field=names, code=pool,
+        start=start, stop=stop, dropna=False, frame=True,
+        code_level=code_level, date_level=date_level,
+    )
+    if filter:
+        stsus = (data['st'] | data['suspended']).replace(np.nan, True)
+        data[name] = data[name].where(~stsus)
+    if adjust:
+        data[name] = data[name] * data['adjfactor']
+    return data[name]
 
 def get_benchmark(
     uri: str,
@@ -65,12 +102,13 @@ def get_benchmark(
     pool: str,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
-    code_level: int | str = 1,
+    code_level: int | str = 0,
+    date_level: int | str = 1,
 ) -> pd.Series:
-    benchmark_table = quool.PanelTable(uri, code_level=code_level)
-    benchmark_data = benchmark_table.read(price, code=pool,
-        start=start, stop=stop).iloc[:, 0].unstack(level=code_level)
-    return benchmark_data.iloc[:, 0]
+    data = get_data(uri=uri, field=price, code=pool,
+        start=start, stop=stop, dropna=False, frame=False,
+        code_level=code_level, date_level=date_level)
+    return data[price].droplevel(level=code_level)
 
 def perform_crosssection(
     factor: pd.DataFrame,

@@ -1,4 +1,5 @@
 # %%
+import quool
 import datetime
 import numpy as np
 import factor as ft
@@ -33,24 +34,33 @@ stop = stop or today
 expname = f'{start}-{stop}-{pool}-{rebalance}'
 result_path = (Path(result_path) / name / expname).expanduser().resolve()
 result_path.mkdir(exist_ok=True, parents=True)
+logger = quool.Logger("Tester")
 
 # %% data prepare
+logger.info("preparing data")
 benchmark = ft.get_benchmark(benchmark_uri, price, pool, start, stop, code_level)
 pool_index = ft.get_pool(pool_uri, pool, start, stop)
 raw_factor = ft.get_factor(factor_uri, name, pool_index, start, stop, code_level)
 price = ft.get_price(price_uri, price, pool_index, start, stop, code_level)
 
 # %% preprocess data for backtest
+logger.info("preprocessing data")
 factor = op.replace(raw_factor, 0, np.nan)
 factor = op.log(factor)
 factor = op.madoutlier(factor, 5)
 factor = op.zscore(factor)
 
 # %% cross section test
-ft.perform_crosssection(factor, price, 5)
+logger.info("performing cross section test")
+ft.perform_crosssection(factor, price, 5, 
+    image=result_path / 'cross-section.png')
 
 # %% perform information coefficiency test
-ft.perform_inforcoef(factor, price, rebalance)
+logger.info("performing information coefficiency test")
+ft.perform_inforcoef(factor, price, rebalance, 
+    image=result_path / 'information-coefficient.png')
 
 # %% perform back test
-ft.perform_backtest(factor, price, longshort=-1, topk=100, benchmark=benchmark)
+logger.info("performing backtest")
+ft.perform_backtest(factor, price, longshort=-1, topk=100, 
+    benchmark=benchmark, image=result_path / 'backtest.png')
