@@ -1,78 +1,53 @@
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 
 import quool
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from collections import namedtuple
 from joblib import Parallel, delayed
 
 
 def get_data(
-    uri: str,
+    datauri: str,
     field: str | list,
-    code: str | list | pd.MultiIndex = None,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
+    pool: str = None,
+    pooluri: str = None,
     dropna: bool = False,
-    frame: bool = True,
     code_level: str | int = 0,
     date_level: str | int = 1,
 ):
-    table = quool.PanelTable(uri, code_level=code_level, date_level=date_level)
     field = quool.parse_commastr(field)
-    if isinstance(code, pd.MultiIndex):
-        code = code.get_level_values(code_level)
-    data = table.read(field, code=code, start=start, stop=stop)
-    result = {}
-    for f in field:
-        _dat = data[f]
-        if dropna:
-            _dat = _dat.dropna()
-        if isinstance(code, pd.MultiIndex):
-            _dat = _dat.loc[_dat.index.intersection(code)]
-        if frame:
-            result[f] = _dat.unstack(level=code_level)
-        else:
-            result[f] = _dat
-    return result
+    data_table = quool.PanelTable(datauri, code_level=code_level, date_level=date_level)
+    if pooluri:
+        pool_table = quool.PanelTable(pooluri, code_level=code_level, date_level=date_level)
 
-def get_pool(
-    uri: str,
-    name: str,
-    start: str | pd.Timestamp = None,
-    stop: str | pd.Timestamp = None,
-    code_level: int | str = 0,
-    date_level: int | str = 1,
-) -> pd.MultiIndex:
-    pool = get_data(
-        uri, name, code=None, 
-        start=start, stop=stop,
-        dropna=True, frame=False,
-        code_level=code_level, 
-        date_level=date_level,
-    )
-    return pool[name].index
-
-def get_factor(
-    uri: str, 
-    name: str,
-    pool: str | list | pd.MultiIndex = None,
-    start: str | pd.Timestamp = None,
-    stop: str | pd.Timestamp = None,
-    code_level: int | str = 0,
-    date_level: int | str = 1,
-) -> pd.DataFrame:
-    return get_data(uri=uri, field=name, code=pool,
-        start=start, stop=stop, dropna=False, frame=True, 
-        code_level=code_level, date_level=date_level
-    )[name]
+    code = None
+    if pool and pooluri:
+        pool_index = pool_table.read(pool, start=start, stop=stop).dropna().index
+        code = pool_index.get_level_values(code_level)
+    elif pool and not pooluri:
+        code = pool
+    
+    data = data_table.read(field, code=code, start=start, stop=stop)
+    if len(field) > 1:
+        return data
+    
+    data = data[field[0]]
+    if dropna:
+        data = data.dropna()
+    if pool and pooluri:
+        data = data.loc[data.index.isin(pool_index)]
+    data = data.unstack(level=code_level)
+    return data
 
 def get_price(
     uri: str,
-    name: str,
-    pool: str | list | pd.MultiIndex = None,
+    ptype: str | list,
+    pool: str = None,
+    pooluri: str = None,
     start: str | pd.Timestamp = None,
     stop: str | pd.Timestamp = None,
     filter: bool = True,
@@ -80,35 +55,40 @@ def get_price(
     code_level: int | str = 0,
     date_level: int | str = 1,
 ) -> pd.DataFrame:
-    names = quool.parse_commastr(name)
+    ptype = quool.parse_commastr(ptype)
     if filter:
-        names += ["st", "suspended"]
+        names = ptype + ["st", "suspended"]
     if adjust:
-        names += ["adjfactor"]
-    data = get_data(uri=uri, field=names, code=pool,
-        start=start, stop=stop, dropna=False, frame=True,
+        names = names + ["adjfactor"]
+    data = get_data(datauri=uri, field=names, 
+        pool=pool, pooluri=pooluri,
+        start=start, stop=stop, dropna=False,
         code_level=code_level, date_level=date_level,
     )
     if filter:
         stsus = (data['st'] | data['suspended']).replace(np.nan, True)
-        data[name] = data[name].where(~stsus)
+        data.loc[:, ptype] = data.loc[:, ptype].where(~stsus)
     if adjust:
-        data[name] = data[name] * data['adjfactor']
-    return data[name]
+        data.loc[:, ptype] = data.loc[:, ptype].mul(data['adjfactor'], axis=0)
+    if len(ptype) > 1:
+        return data[ptype]
+    return data[ptype[0]].unstack(level=code_level)
 
-def get_benchmark(
+def save_data(
+    data: pd.DataFrame, 
+    name: str, 
     uri: str,
-    price: str,
-    pool: str,
-    start: str | pd.Timestamp = None,
-    stop: str | pd.Timestamp = None,
-    code_level: int | str = 0,
-    date_level: int | str = 1,
-) -> pd.Series:
-    data = get_data(uri=uri, field=price, code=pool,
-        start=start, stop=stop, dropna=False, frame=False,
+    code_level: str = 'order_book_id',
+    date_level: str = 'date',
+):
+    table = quool.PanelTable(uri, 
         code_level=code_level, date_level=date_level)
-    return data[price].droplevel(level=code_level)
+    data = data.stack().reorder_levels([code_level, date_level])
+    data.name = name
+    if name in table.columns:
+        table.update(data)
+    else:
+        table.add(data)
 
 def perform_crosssection(
     factor: pd.DataFrame,
@@ -188,20 +168,20 @@ def perform_backtest(
         delayed(quool.rebalance_strategy)(
             groups.where(groups == i), price, delay, 'both', commission, benchmark
     ) for i in range(1, ngroup + 1))
-    ngroup_evaluation = pd.concat([res.evaluation for res in ngroup_result], 
+    ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
-    ngroup_returns = pd.concat([res.returns for res in ngroup_result], 
+    ngroup_returns = pd.concat([res['returns'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
-    ngroup_turnover = pd.concat([res.turnover for res in ngroup_result], 
+    ngroup_turnover = pd.concat([res['turnover'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
 
     # topk test
     topks = (factor.rank(axis=1) * longshort) <= topk
     topks = factor.mask(topks, 1).mask(~topks, 0)
     topk_result = quool.rebalance_strategy(topks, price, delay, 'both', commission, benchmark)
-    topk_evaluation = topk_result.evaluation
-    topk_returns = topk_result.returns
-    topk_turnover = topk_result.turnover
+    topk_evaluation = topk_result['evaluation']
+    topk_returns = topk_result['returns']
+    topk_turnover = topk_result['turnover']
 
     # longshort test
     longshort_returns = longshort * (ngroup_returns[f"group{ngroup}"] - ngroup_returns["group1"])
@@ -210,6 +190,7 @@ def perform_backtest(
     
     # merge returns
     if benchmark is not None:
+        benchmark = benchmark.squeeze()
         benchmark = benchmark.pct_change().fillna(0)
         ngroup_exreturns = ngroup_returns.sub(benchmark, axis=0)
         ngroup_returns = pd.concat([ngroup_returns, benchmark], axis=1)
@@ -269,12 +250,15 @@ def perform_backtest(
                 ngroup_exvalue.to_excel(writer, sheet_name=ngroup_exreturns.name)
                 topk_exvalue.to_excel(writer, sheet_name=topk_exreturns.name)
 
-    return namedtuple('BacktestReturn', [
-        'ngroup_evaluation', 'ngroup_returns', 'ngroup_value', 'ngroup_turnover',
-        'topk_evaluation', 'topk_returns', 'topk_value', 'topk_turnover',
-        'longshort_returns', 'longshort_value',
-    ])(
-        ngroup_evaluation, ngroup_returns, ngroup_value, ngroup_turnover,
-        topk_evaluation, topk_returns, topk_value, topk_turnover,
-        longshort_returns, longshort_value,
-    )
+    return {
+        'ngroup_evaluation': ngroup_evaluation, 
+        'ngroup_returns': ngroup_returns, 
+        'ngroup_value': ngroup_value, 
+        'ngroup_turnover': ngroup_turnover,
+        'topk_evaluation': topk_evaluation, 
+        'topk_returns': topk_returns, 
+        'topk_value': topk_value, 
+        'topk_turnover': topk_turnover,
+        'longshort_returns': longshort_returns, 
+        'longshort_value': longshort_value,
+    }
