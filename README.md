@@ -16,4 +16,6 @@ version 0.1.0: add `report` module can help you backtesting any factor you want.
 
 version 0.2.0: seperate task file out, and can perform backtest more flexible; reorganizing tools to factor core file.
 
-version 0.2.1: (current version) fix problem in not returning information from backtest function
+version 0.2.1: fix problem in not returning information from backtest function
+
+version 0.2.2: (current version) reorganize factor computing scripts to `contrib` directory. And any definitions added can be put there in form of function.
