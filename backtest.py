@@ -2,11 +2,10 @@ import quool
 import datetime
 import numpy as np
 import factor as ft
-import operators as op
 from pathlib import Path
 
 
-name = 'tailvolume30min' # factorr name
+name = 'ep' # factorr name
 factor_uri = '/home/data/factordev' # factor table uri
 price_uri = '/home/data/quotes-day' # price table uri
 pool_uri = '/home/data/index-weights' # pool table uri
@@ -39,10 +38,10 @@ benchmark = ft.get_data(benchmark_uri, "close", start, stop, pool, None)
 raw_factor = ft.get_data(factor_uri, name, start, stop, pool, pool_uri)
 
 logger.info("preprocessing data")
-factor = op.replace(raw_factor, 0, np.nan)
-factor = op.log(factor)
-factor = op.madoutlier(factor, 5)
-factor = op.zscore(factor)
+factor = ft.replace(raw_factor, 0, np.nan)
+factor = ft.log(factor)
+factor = ft.madoutlier(factor, 5)
+factor = ft.zscore(factor)
 
 logger.info("performing cross section test")
 ft.perform_crosssection(factor, price, 5, 
