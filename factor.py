@@ -1,4 +1,4 @@
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 import quool
@@ -43,6 +43,24 @@ def get_data(
     data = data.unstack(level=code_level)
     return data
 
+def get_trading_days(
+    uri: str, 
+    start: str, 
+    stop: str, 
+    field: str = 'close',
+) -> pd.DatetimeIndex:
+    table = quool.PanelTable(uri)
+    field = table.read('close', code='000001.XSHE', start=start, stop=stop)
+    trading_days = field.droplevel(0).index
+    return trading_days
+
+def get_trading_days_rollback(uri: str, date: str, shift: int) -> pd.DatetimeIndex:
+    rollback_days = int(np.ceil(113 * shift / 252) + shift / 5 * 7)
+    rollback = pd.to_datetime(date) - pd.Timedelta(days=rollback_days)
+    trading_days = get_trading_days(uri, start=rollback, stop=date)
+    rollback = trading_days[trading_days <= date][-shift]
+    return rollback
+
 def get_price(
     uri: str,
     ptype: str | list,
@@ -75,7 +93,7 @@ def get_price(
     return data[ptype[0]].unstack(level=code_level)
 
 def save_data(
-    data: pd.DataFrame, 
+    data: pd.DataFrame | pd.Series, 
     name: str, 
     uri: str,
     code_level: str = 'order_book_id',
@@ -83,7 +101,8 @@ def save_data(
 ):
     table = quool.PanelTable(uri, 
         code_level=code_level, date_level=date_level)
-    data = data.stack().reorder_levels([code_level, date_level])
+    if isinstance(data, pd.DataFrame):
+        data = data.stack().reorder_levels([code_level, date_level])
     data.name = name
     if name in table.columns:
         table.update(data)
