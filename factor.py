@@ -55,9 +55,7 @@ def get_trading_days(
     return trading_days
 
 def get_trading_days_rollback(uri: str, date: str, shift: int) -> pd.DatetimeIndex:
-    rollback_days = int(np.ceil(113 * shift / 252) + shift / 5 * 7)
-    rollback = pd.to_datetime(date) - pd.Timedelta(days=rollback_days)
-    trading_days = get_trading_days(uri, start=rollback, stop=date)
+    trading_days = get_trading_days(uri, start=None, stop=date)
     rollback = trading_days[trading_days <= date][-shift]
     return rollback
 
@@ -180,7 +178,7 @@ def perform_crosssection(
     image: str | bool = True,
     result: str = None,
 ):
-    crossdate = factor.index[min(crossdate, -rebalance)].strftime(r"%Y-%m-%d")
+    crossdate = factor.index[min(crossdate, -rebalance - 1)].strftime(r"%Y-%m-%d")
     factor = factor.loc[crossdate]
     if price is not None:
         future_returns = price.shift(-rebalance) / price - 1
@@ -292,7 +290,6 @@ def perform_backtest(
     ngroup_evaluation.name = "ngroup evaluation"
     ngroup_value.name = "ngroup value"
     topk_value.name = "topk value"
-    topk_exvalue.name = "topk exvalue"
     longshort_value.name = "longshort value"
     ngroup_turnover.name = "ngroup turnover"
     topk_turnover.name = "topk turnover"

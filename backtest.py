@@ -13,7 +13,7 @@ benchmark_uri = '/home/data/index-quotes-day' # benchmark table uri
 start = '20180101' # backtest start
 price = "open" # the buy price to compute future return
 stop = None # backtest stop
-pool = '000985.XSHG' # backtest pool
+pool = None # backtest pool
 delay = 1 # the delayed days to execute buy
 rebalance = 5 # rebalance day
 code_level = 'order_book_id' # code level in database
@@ -34,17 +34,19 @@ logger = quool.Logger("Tester")
 
 logger.info("preparing data")
 price = ft.get_price(price_uri, "open", pool, pool_uri, start, stop)
-benchmark = ft.get_data(benchmark_uri, "close", start, stop, pool, None)
+benchmark = None
+if pool is not None:
+    benchmark = ft.get_data(benchmark_uri, "close", start, stop, pool, None)
 raw_factor = ft.get_data(factor_uri, name, start, stop, pool, pool_uri)
 
 logger.info("preprocessing data")
-factor = ft.replace(raw_factor, 0, np.nan)
-factor = ft.log(factor)
-factor = ft.madoutlier(factor, 5)
+# factor = ft.replace(raw_factor, 0, np.nan)
+# factor = ft.log(raw_factor)
+factor = ft.madoutlier(raw_factor, 5)
 factor = ft.zscore(factor)
 
 logger.info("performing cross section test")
-ft.perform_crosssection(factor, price, 5, 
+ft.perform_crosssection(factor, price, rebalance, 
     image=result_path / 'cross-section.png')
 
 logger.info("performing information coefficiency test")
