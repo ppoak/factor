@@ -10,7 +10,7 @@ def get_logsize(
     shares = factor.get_data(qtd_uri, "circulation_a", start=start, stop=stop)
     price = factor.get_data(qtd_uri, "close", start=start, stop=stop)
     adjfactor = factor.get_data(qtd_uri, "adjfactor", start=start, stop=stop)
-    return np.log(shares * price * adjfactor)
+    return -np.log(shares * price * adjfactor)
 
 def get_momentum_20d(
     start: str, stop: str,
@@ -20,7 +20,7 @@ def get_momentum_20d(
     price = factor.get_data(qtd_uri, "close", start=rollback, stop=stop)
     adjfactor = factor.get_data(qtd_uri, "adjfactor", start=rollback, stop=stop)
     price *= adjfactor
-    return (price / price.shift(20) - 1).loc[start:stop]
+    return -(price / price.shift(20) - 1).loc[start:stop]
 
 def get_volatility_20d(
     start: str, stop: str,
@@ -31,7 +31,7 @@ def get_volatility_20d(
     adjfactor = factor.get_data(qtd_uri, "adjfactor", start=rollback, stop=stop)
     price *= adjfactor
     returns = price / price.shift(1) - 1
-    return returns.rolling(20).std().loc[start:stop]
+    return -returns.rolling(20).std().loc[start:stop]
 
 def get_ep(
     start: str, stop: str,
