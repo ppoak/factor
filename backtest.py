@@ -42,17 +42,17 @@ raw_factor = ft.get_data(factor_uri, name, start, stop, pool, pool_uri)
 logger.info("preprocessing data")
 # factor = ft.replace(raw_factor, 0, np.nan)
 # factor = ft.log(raw_factor)
-factor = ft.madoutlier(raw_factor, 5)
-factor = ft.zscore(factor)
+ft = ft.madoutlier(raw_factor, 5)
+ft = ft.zscore(ft)
 
 logger.info("performing cross section test")
-ft.perform_crosssection(factor, price, rebalance, 
+ft.perform_crosssection(ft, price, rebalance, 
     image=result_path / 'cross-section.png')
 
 logger.info("performing information coefficiency test")
-ft.perform_inforcoef(factor, price, rebalance, 
+ft.perform_inforcoef(ft, price, rebalance, 
     image=result_path / 'information-coefficient.png')
 
 logger.info("performing backtest")
-ft.perform_backtest(factor, price, longshort=-1, topk=100, 
+ft.perform_backtest(ft, price, longshort=-1, topk=100, 
     benchmark=benchmark, image=result_path / 'backtest.png')
