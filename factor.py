@@ -231,7 +231,6 @@ def perform_inforcoef(
 def perform_backtest(
     factor: pd.DataFrame,
     price: pd.DataFrame,
-    longshort: int = 1,
     topk: int = 100,
     benchmark: pd.Series = None,
     delay: int = 1,
@@ -249,23 +248,27 @@ def perform_backtest(
     ) for i in range(1, ngroup + 1))
     ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
-    ngroup_returns = pd.concat([res['returns'] for res in ngroup_result], 
+    ngroup_value = pd.concat([res['value'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
     ngroup_turnover = pd.concat([res['turnover'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
 
     # topk test
-    topks = (factor.rank(axis=1) * longshort) <= topk
-    topks = factor.mask(topks, 1).mask(~topks, 0)
+    topks = factor.sort_values(ascending=False).iloc[:topk]
+    topks = factor.mask(topks, 1 / topk).mask(~topks, 0)
     topk_result = quool.weight_strategy(topks, price, delay, 'both', commission, benchmark)
     topk_evaluation = topk_result['evaluation']
-    topk_returns = topk_result['returns']
+    topk_value = topk_result['value']
     topk_turnover = topk_result['turnover']
 
+    # compute returns
+    ngroup_returns = ngroup_value.pct_change().fillna(0)
+    topk_returns = topk_value.pct_change().fillna(0)
+    
     # longshort test
-    longshort_returns = longshort * (ngroup_returns[f"group{ngroup}"] - ngroup_returns["group1"])
+    longshort_returns = ngroup_returns[f"group{ngroup}"] - ngroup_returns["group1"]
     longshort_value = (longshort_returns + 1).cumprod()
-    longshort_value.name = f"group1 - group{ngroup}" if longshort > 0 else f"group{ngroup} - group1"
+    longshort_value.name = "long-short"
     
     # merge returns
     if benchmark is not None:
@@ -275,11 +278,6 @@ def perform_backtest(
         ngroup_returns = pd.concat([ngroup_returns, benchmark], axis=1)
         topk_exreturns = topk_returns.sub(benchmark, axis=0)
         topk_returns = pd.concat([topk_returns, benchmark], axis=1)
-
-    # compute value
-    ngroup_value = (ngroup_returns + 1).cumprod()
-    topk_value = (topk_returns + 1).cumprod()
-    longshort_value = (longshort_returns + 1).cumprod()
     
     # compute exvalue
     if benchmark is not None:
@@ -330,13 +328,10 @@ def perform_backtest(
 
     return {
         'ngroup_evaluation': ngroup_evaluation, 
-        'ngroup_returns': ngroup_returns, 
         'ngroup_value': ngroup_value, 
         'ngroup_turnover': ngroup_turnover,
         'topk_evaluation': topk_evaluation, 
-        'topk_returns': topk_returns, 
         'topk_value': topk_value, 
         'topk_turnover': topk_turnover,
-        'longshort_returns': longshort_returns, 
         'longshort_value': longshort_value,
     }
