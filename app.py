@@ -28,6 +28,7 @@ FACTOR_INFO = {
     "momentum_20d": {"module": barra, "uri": BARRA_URI},
     "volatility_20d": {"module": barra, "uri": BARRA_URI},
     "ep": {"module": barra, "uri": BARRA_URI},
+    "bp": {"module": barra, "uri": BARRA_URI},
     "roa": {"module": barra, "uri": BARRA_URI},
     "roe": {"module": barra, "uri": BARRA_URI},
     "current_asset_ratio": {"module": barra, "uri": BARRA_URI},
@@ -116,7 +117,7 @@ def parsearg():
     parser.add_argument("--factor_uri", type=str, default=None)
     parser.add_argument("--ptype", type=str, default="open")
     parser.add_argument("--rebperiod", type=int, default=5)
-    parser.add_argument("--start", type=str, default="20230101")
+    parser.add_argument("--start", type=str, default=None)
     parser.add_argument("--stop", type=str, default=None)
     parser.add_argument("--topk", type=int, default=100)
     parser.add_argument("--pool", type=str, default=None)
@@ -128,8 +129,10 @@ def parsearg():
 if __name__ == "__main__":
     args = parsearg()
     if args.dump:
+        start = args.start or YESTERDAY_STR
+        stop = args.stop or YESTERDAY_STR
         for factor in FACTOR_INFO.keys():
-            dump(factor, YESTERDAY_STR, YESTERDAY_STR)
+            dump(factor, start, stop)
     elif args.test:
         if args.factor is None or args.factor_uri is None:
             raise ValueError("you need to assign a factor and its database when testing")
