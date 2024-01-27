@@ -48,6 +48,22 @@ def get_ep(
     net_profit = net_profit.reindex(trading_days).ffill()
     return (net_profit / value).loc[start:stop]
 
+def get_bp(
+    start: str, stop: str,
+) -> pd.DataFrame:
+    qtd_uri = '/home/data/quotes-day'
+    fin_uri = '/home/data/financial'
+    rollback = ft.get_trading_days_rollback(qtd_uri, start, 250)
+    trading_days = ft.get_trading_days(qtd_uri, rollback, stop)
+    shares = ft.get_data(qtd_uri, "circulation_a", start=start, stop=stop)
+    price = ft.get_data(qtd_uri, "close", start=start, stop=stop)
+    adjfactor = ft.get_data(qtd_uri, "adjfactor", start=start, stop=stop)
+    value = price * adjfactor * shares
+    totol_equity = ft.get_data(fin_uri, 'totol_equity', start=rollback, stop=stop)
+    totol_equity = totol_equity.reindex(trading_days).ffill()
+    return (totol_equity / value).loc[start:stop]
+
+
 def get_roa(
     start: str, stop: str,
 ) -> pd.DataFrame:

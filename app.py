@@ -78,9 +78,9 @@ def parsearg():
 
 
 if __name__ == "__main__":
-    dump_, ft, pool, topk = parsearg()
+    dump_, factor, pool, topk = parsearg()
     if dump_:
         for ft in FACTOR_INFO.keys():
-            dump(ft, YESTERDAY_STR, YESTERDAY_STR)
+            dump(factor, YESTERDAY_STR, YESTERDAY_STR)
     else:
-        rebalance(ft, pool, YESTERDAY_STR, topk)
+        rebalance(factor, pool, YESTERDAY_STR, topk)
