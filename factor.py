@@ -244,7 +244,8 @@ def perform_backtest(
     groups = factor.apply(lambda x: pd.qcut(x, q=ngroup, labels=False), axis=1) + 1
     ngroup_result = Parallel(n_jobs=n_jobs, backend='loky')(
         delayed(quool.weight_strategy)(
-            groups.where(groups == i), price, delay, 'both', commission, benchmark
+            groups.where(groups == i).div(groups.where(groups == i).sum(axis=1), axis=0), 
+            price, 'both', 1000000, commission, benchmark, False, None
     ) for i in range(1, ngroup + 1))
     ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
@@ -254,9 +255,10 @@ def perform_backtest(
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
 
     # topk test
-    topks = factor.sort_values(ascending=False).iloc[:topk]
+    topks = factor.rank(ascending=False, axis=1) < topk
     topks = factor.mask(topks, 1 / topk).mask(~topks, 0)
-    topk_result = quool.weight_strategy(topks, price, delay, 'both', commission, benchmark)
+    topk_result = quool.weight_strategy(topks, price, 'both', 
+        1000000, commission, benchmark, False, None)
     topk_evaluation = topk_result['evaluation']
     topk_value = topk_result['value']
     topk_turnover = topk_result['turnover']
