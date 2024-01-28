@@ -1,9 +1,15 @@
+"""
+Referring to BARRA-USE5, more explaination at: https://zhuanlan.zhihu.com/p/31412967
+"""
+
 import numpy as np
 import factor as ft
 import pandas as pd
+from joblib import Parallel, delayed
 
 
 QTD_URI = '/home/data/quotes-day'
+IDXQTD_URI = '/home/data/index-quotes-day'
 FIN_URI = '/home/data/financial'
 
 
@@ -14,6 +20,27 @@ def get_logsize(
     price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
     return -np.log(shares * price * adjfactor).loc[start:stop]
+
+def get_beta(start: str, stop: str) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, 253)
+    price = ft.get_data(QTD_URI, "close", start=rollback, stop=stop)
+    index_price = ft.get_data(IDXQTD_URI, "close", pool="000001.XSHG", start=rollback, stop=stop).squeeze()
+    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=rollback, stop=stop)
+    price *= adjfactor
+    returns = price.pct_change(fill_method=None).iloc[1:]
+    index_returns = index_price.pct_change(fill_method=None).iloc[1:]
+
+    def _g_b(x):
+        if x.shape[0] < 252:
+            return pd.Series(index=x.columns)
+        idxrt = index_returns.loc[x.index]
+        return x.apply(lambda y:
+            ((y - y.mean()) * (idxrt - idxrt.mean())).ewm(halflife=63).mean().iloc[-1] /
+            ((idxrt - idxrt.mean()) ** 2).ewm(halflife=63).mean().iloc[-1]
+        )
+    
+    beta = Parallel(n_jobs=-1, backend="loky")(delayed(_g_b)(x) for x in returns.rolling(252))
+    return pd.concat(beta[252:], axis=1, keys=returns.index[252:]).T.loc[start:stop]
 
 def get_momentum_20d(
     start: str, stop: str,

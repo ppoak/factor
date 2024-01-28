@@ -56,7 +56,7 @@ def get_trading_days(
 
 def get_trading_days_rollback(uri: str, date: str, shift: int) -> pd.DatetimeIndex:
     trading_days = get_trading_days(uri, start=None, stop=date)
-    rollback = trading_days[trading_days <= date][-shift]
+    rollback = trading_days[trading_days <= date][-shift - 1]
     return rollback
 
 def get_price(
