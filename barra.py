@@ -24,7 +24,7 @@ def get_logsize(
 def get_beta(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, 253)
     price = ft.get_data(QTD_URI, "close", start=rollback, stop=stop)
-    index_price = ft.get_data(IDXQTD_URI, "close", pool="000001.XSHG", start=rollback, stop=stop).squeeze()
+    index_price = ft.get_data(IDXQTD_URI, "close", pool="000985.XSHG", start=rollback, stop=stop).squeeze()
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=rollback, stop=stop)
     price *= adjfactor
     returns = price.pct_change(fill_method=None).iloc[1:]
