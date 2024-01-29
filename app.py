@@ -36,10 +36,7 @@ FACTOR_INFO = {
 }
 
 def factor_performance(
-    factor: str, 
-    factor_uri: str,
-    start: str, 
-    stop: str,
+    factor_data: pd.DataFrame,
     ptype: str = 'open',
     rebperiod: int = 20,
     pool: str = None,
@@ -47,6 +44,8 @@ def factor_performance(
     topk: int = 100,
     result_path: str = "report",
 ):
+    start = factor_data.index.min()
+    stop = factor_data.index.max()
     logger = quool.Logger("FactorTester", display_name=True)
     result_path = Path(result_path) / factor
     result_path.mkdir(parents=True, exist_ok=True)
@@ -55,24 +54,18 @@ def factor_performance(
     benchmark = None
     if pool is not None:
         benchmark = ft.get_data(BENCHMARK_URI, "close", start, stop, pool, None)
-    raw_factor = ft.get_data(factor_uri, factor, start, stop, pool, pool_uri)
-    raw_factor = raw_factor.iloc[::rebperiod]
-    logger.info("preprocessing data")
-    # factor = ft.replace(raw_factor, 0, np.nan)
-    # factor = ft.log(raw_factor)
-    factor = ft.madoutlier(raw_factor, 5)
-    factor = ft.zscore(factor)
+    factor_data = factor_data.iloc[::rebperiod]
 
     logger.info("performing cross section test")
-    ft.perform_crosssection(factor, price, rebperiod, 
+    ft.perform_crosssection(factor_data, price, rebperiod, 
         image=result_path / 'cross-section.png')
 
     logger.info("performing information coefficiency test")
-    ft.perform_inforcoef(factor, price, rebperiod, 
+    ft.perform_inforcoef(factor_data, price, rebperiod, 
         image=result_path / 'information-coefficient.png')
 
     logger.info("performing backtest")
-    ft.perform_backtest(factor, price, topk=topk,
+    ft.perform_backtest(factor_data, price, topk=topk,
         benchmark=benchmark, image=result_path / 'backtest.png')
 
 def dump(factor: str, start: str, stop: str):
@@ -136,7 +129,7 @@ if __name__ == "__main__":
     elif args.test:
         if args.factor is None or args.factor_uri is None:
             raise ValueError("you need to assign a factor and its database when testing")
-        factor_performance(args.factor, args.factor_uri, args.start, args.stop, 
-            args.ptype, args.rebperiod, args.pool, args.pool_uri, args.topk, args.result_path)
+        factor_data = ft.get_data(args.factor, args.factor_uri, args.start, args.stop, args.pool, args.pool_uri)
+        factor_performance(factor_data, args.ptype, args.rebperiod, args.pool, args.pool_uri, args.topk, args.result_path)
     else:
         rebalance(args.factor, args.pool, YESTERDAY_STR, args.topk)

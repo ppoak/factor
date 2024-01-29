@@ -1,5 +1,6 @@
 """
 Referring to BARRA-USE5, more explaination at: https://zhuanlan.zhihu.com/p/31412967
+About how to construct the regression and how to solve, refer to https://zhuanlan.zhihu.com/p/39922829
 """
 
 import numpy as np
