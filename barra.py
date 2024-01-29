@@ -38,13 +38,15 @@ def get_beta(start: str, stop: str) -> pd.DataFrame:
         if x.shape[0] < YEAR:
             return pd.Series(index=x.columns, name=x.index[-1])
         idxrt = index_returns.loc[x.index]
-        return x.apply(lambda y:
+        res = x.apply(lambda y:
             ((y - y.mean()) * (idxrt - idxrt.mean())).ewm(halflife=YEAR // 2).mean().iloc[-1] /
             ((idxrt - idxrt.mean()) ** 2).ewm(halflife=YEAR // 2).mean().iloc[-1]
         )
+        res.name = x.index[-1]
+        return res
     
     beta = Parallel(n_jobs=-1, backend="loky")(delayed(_g_b)(x) for x in returns.rolling(YEAR))
-    return pd.concat(beta[YEAR:], axis=1).T.loc[start:stop]
+    return pd.concat(beta, axis=1).T.loc[start:stop]
 
 def get_momentum(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, 2 * YEAR + 1)
@@ -55,26 +57,37 @@ def get_momentum(start: str, stop: str) -> pd.DataFrame:
     def _g_m(x):
         if x.shape[0] < 2 * YEAR:
             return pd.Series(index=x.columns, name=x.index[-1])
-        return x.shift(MONTH).ewm(halflife=YEAR // 2).mean().iloc[-1]
+        return x.shift(MONTH).ewm(halflife=YEAR // 2).sum().iloc[-1]
     momentum = Parallel(n_jobs=-1, backend="loky")(delayed(_g_m)(x) for x in logreturns.rolling(2 * YEAR))
     return pd.concat(momentum, axis=1).T.loc[start:stop]
 
-def get_volatility(start: str, stop: str) -> pd.DataFrame:
+def get_datsd(start: str, stop: str) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR + 1)
+    price = ft.get_data(QTD_URI, "close", start=rollback, stop=stop)
+    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=rollback, stop=stop)
+    price *= adjfactor
+    logreturns = np.log(price / price.shift(1)).iloc[1:]
+    return logreturns.ewm(halflife=2 * MONTH).std()
+
+def get_cmra(start: str, stop: str) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR + 1)
+    price = ft.get_data(QTD_URI, "close", start=rollback, stop=stop)
+    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=rollback, stop=stop)
+    price *= adjfactor
+    logreturns = np.log(price / price.shift(1)).iloc[1:]
+    cmra = Parallel(n_jobs=-1, backend="loky")(delayed(lambda x: x.cumsum().max() - x.cumsum().min())(x) for x in logreturns.rolling(YEAR))
+    return pd.concat(cmra, axis=1, keys=logreturns.index).T.loc[start:stop]
+
+def get_hsigma(start: str, stop: str):
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR + 1)
     price = ft.get_data(QTD_URI, "close", start=rollback, stop=stop)
     index_price = ft.get_data(IDXQTD_URI, "close", pool=INDEX_CODE, start=rollback, stop=stop).squeeze()
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=rollback, stop=stop)
     price *= adjfactor
-    logreturns = np.log(price / price.shift(1)).iloc[1:]
     returns = price.pct_change(fill_method=None).iloc[1:]
     index_returns = index_price.pct_change(fill_method=None).iloc[1:]
     beta = get_beta(rollback, stop)
     size = np.exp(-get_logsize(rollback, stop))
-    datsd = logreturns.ewm(halflife=2 * MONTH).std()
-    datsd = ft.zscore(datsd)
-    cmra = Parallel(n_jobs=-1, backend="loky")(delayed(lambda x: x.cumsum().max() - x.cumsum().min())(x) for x in logreturns.rolling(YEAR))
-    cmra = pd.concat(cmra, axis=1, keys=logreturns.index).T
-    cmra = ft.zscore(cmra)
     hsigma = (returns - beta.mul(index_returns, axis=0)).rolling(YEAR).std()
     def _decolinear(x, y):
         x = x.dropna()
@@ -91,8 +104,12 @@ def get_volatility(start: str, stop: str) -> pd.DataFrame:
     hsigma = Parallel(n_jobs=-1, backend="loky")(delayed(_decolinear)
         (pd.concat([size.iloc[i], beta.iloc[i]], axis=1, keys=["size", "beta"]), hsigma.iloc[i]) for i in range(len(hsigma))
     )
-    hsigma = pd.concat(hsigma, axis=1).T
-    hsigma = ft.zscore(hsigma)
+    return pd.concat(hsigma, axis=1).T.loc[start:stop]
+
+def get_volatility(start: str, stop: str) -> pd.DataFrame:
+    datsd = ft.zscore(get_datsd(start, stop))
+    cmra = ft.zscore(get_cmra(start, stop))
+    hsigma = ft.zscore(get_hsigma(start, stop))
     return (0.74 * datsd + 0.16 * cmra + 0.1 * hsigma).loc[start:stop]
 
 def get_ep(
