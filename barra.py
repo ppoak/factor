@@ -12,6 +12,7 @@ from joblib import Parallel, delayed
 
 QTD_URI = '/home/data/quotes-day'
 IDXQTD_URI = '/home/data/index-quotes-day'
+IDS_URI = "/home/data/industry-info"
 FIN_URI = '/home/data/financial'
 
 YEAR = 252
@@ -19,6 +20,9 @@ MONTH = 21
 
 INDEX_CODE = "000985.XSHG"
 
+
+def get_industry(start: str, stop: str) -> pd.DataFrame:
+    return ft.get_data(IDS_URI, "third_industry_name", start=start, stop=stop)
 
 def get_logsize(start: str, stop: str) -> pd.DataFrame:
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
@@ -133,19 +137,6 @@ def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
     )
     return ft.zscore(ft.stdoutlier(pd.concat(nlsize, axis=1).T.loc[start:stop], 3))
 
-def get_ep(
-    start: str, stop: str,
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
-    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
-    shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
-    price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
-    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
-    value = price * adjfactor * shares
-    net_profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop)
-    net_profit = net_profit.reindex(trading_days).ffill()
-    return (net_profit / value).loc[start:stop]
-
 def get_bp(
     start: str, stop: str,
 ) -> pd.DataFrame:
@@ -159,35 +150,3 @@ def get_bp(
     totol_equity = totol_equity.reindex(trading_days).ffill()
     return (totol_equity / value).loc[start:stop]
 
-def get_roa(
-    start: str, stop: str,
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
-    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
-    net_profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop)
-    net_profit = net_profit.reindex(trading_days).ffill()
-    total_asset = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop)
-    total_asset = total_asset.reindex(trading_days).ffill()
-    return (net_profit / total_asset).loc[start:stop]
-
-def get_roe(
-    start: str, stop: str,
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
-    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
-    net_profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop)
-    net_profit = net_profit.reindex(trading_days).ffill()
-    total_equity = ft.get_data(FIN_URI, 'total_equity', start=rollback, stop=stop)
-    total_equity = total_equity.reindex(trading_days).ffill()
-    return (net_profit / total_equity).loc[start:stop]
-
-def get_current_asset_ratio(
-    start: str, stop: str,
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
-    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
-    current_assets = ft.get_data(FIN_URI, 'current_assets', start=rollback, stop=stop)
-    current_assets = current_assets.reindex(trading_days).ffill()
-    total_asset = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop)
-    total_asset = total_asset.reindex(trading_days).ffill()
-    return (current_assets / total_asset).loc[start:stop]
