@@ -112,6 +112,26 @@ def get_volatility(start: str, stop: str) -> pd.DataFrame:
     hsigma = ft.zscore(get_hsigma(start, stop))
     return (0.74 * datsd + 0.16 * cmra + 0.1 * hsigma).loc[start:stop]
 
+def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
+    size = -get_logsize(start, stop)
+    tsize = size ** 3
+    def _decolinear(x, y):
+        x = x.dropna()
+        y = y.dropna()
+        idx = x.index.intersection(y.index)
+        x = x.loc[idx]
+        y = y.loc[idx]
+        if x.empty or y.empty:
+            return pd.Series(index=y.index, name=y.name)
+        model = sm.OLS(y, sm.add_constant(x)).fit()
+        resid = model.resid
+        resid.name = y.name
+        return resid
+    nlsize = Parallel(n_jobs=-1, backend='loky')(delayed(_decolinear)
+        (size.iloc[i], tsize.iloc[i]) for i in range(tsize.shape[0])
+    )
+    return ft.zscore(ft.stdoutlier(pd.concat(nlsize, axis=1).T.loc[start:stop], 3))
+
 def get_ep(
     start: str, stop: str,
 ) -> pd.DataFrame:

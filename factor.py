@@ -233,7 +233,6 @@ def perform_backtest(
     price: pd.DataFrame,
     topk: int = 100,
     benchmark: pd.Series = None,
-    delay: int = 1,
     ngroup: int = 5,
     commission: float = 0.002,
     n_jobs: int = -1,
