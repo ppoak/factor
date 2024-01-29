@@ -36,7 +36,7 @@ def get_beta(start: str, stop: str) -> pd.DataFrame:
 
     def _g_b(x):
         if x.shape[0] < YEAR:
-            return pd.Series(index=x.columns)
+            return pd.Series(index=x.columns, name=x.index[-1])
         idxrt = index_returns.loc[x.index]
         return x.apply(lambda y:
             ((y - y.mean()) * (idxrt - idxrt.mean())).ewm(halflife=YEAR // 2).mean().iloc[-1] /
@@ -44,7 +44,7 @@ def get_beta(start: str, stop: str) -> pd.DataFrame:
         )
     
     beta = Parallel(n_jobs=-1, backend="loky")(delayed(_g_b)(x) for x in returns.rolling(YEAR))
-    return pd.concat(beta[YEAR:], axis=1, keys=returns.index[YEAR:]).T.loc[start:stop]
+    return pd.concat(beta[YEAR:], axis=1).T.loc[start:stop]
 
 def get_momentum(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, 2 * YEAR + 1)
@@ -69,7 +69,7 @@ def get_volatility(start: str, stop: str) -> pd.DataFrame:
     returns = price.pct_change(fill_method=None).iloc[1:]
     index_returns = index_price.pct_change(fill_method=None).iloc[1:]
     beta = get_beta(rollback, stop)
-    size = get_logsize(rollback, stop)
+    size = np.exp(-get_logsize(rollback, stop))
     datsd = logreturns.ewm(halflife=2 * MONTH).std()
     datsd = ft.zscore(datsd)
     cmra = Parallel(n_jobs=-1, backend="loky")(delayed(lambda x: x.cumsum().max() - x.cumsum().min())(x) for x in logreturns.rolling(YEAR))
@@ -91,6 +91,7 @@ def get_volatility(start: str, stop: str) -> pd.DataFrame:
     hsigma = Parallel(n_jobs=-1, backend="loky")(delayed(_decolinear)
         (pd.concat([size.iloc[i], beta.iloc[i]], axis=1, keys=["size", "beta"]), hsigma.iloc[i]) for i in range(len(hsigma))
     )
+    hsigma = pd.concat(hsigma, axis=1).T
     hsigma = ft.zscore(hsigma)
     return (0.74 * datsd + 0.16 * cmra + 0.1 * hsigma).loc[start:stop]
 
