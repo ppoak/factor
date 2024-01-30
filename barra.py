@@ -23,7 +23,7 @@ def get_logsize(start: str, stop: str) -> pd.DataFrame:
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
     price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
-    return -np.log(shares * price * adjfactor).loc[start:stop]
+    return np.log(shares * price * adjfactor).loc[start:stop]
 
 def get_beta(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR + 1)
@@ -87,7 +87,7 @@ def get_hsigma(start: str, stop: str):
     returns = price.pct_change(fill_method=None).iloc[1:]
     index_returns = index_price.pct_change(fill_method=None).iloc[1:]
     beta = get_beta(rollback, stop)
-    size = np.exp(-get_logsize(rollback, stop))
+    size = np.exp(get_logsize(rollback, stop))
     hsigma = (returns - beta.mul(index_returns, axis=0)).rolling(YEAR).std()
     def _decolinear(x, y):
         x = x.dropna()
@@ -113,7 +113,7 @@ def get_volatility(start: str, stop: str) -> pd.DataFrame:
     return (0.74 * datsd + 0.16 * cmra + 0.1 * hsigma).loc[start:stop]
 
 def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
-    size = -get_logsize(start, stop)
+    size = get_logsize(start, stop)
     tsize = size ** 3
     def _decolinear(x, y):
         x = x.dropna()
@@ -190,3 +190,33 @@ def get_current_asset_ratio(
     total_asset = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop)
     total_asset = total_asset.reindex(trading_days).ffill()
     return (current_assets / total_asset).loc[start:stop]
+
+def get_liquidity(
+    start: str, stop: str,
+) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
+    volume = ft.get_data(QTD_URI, 'volume', start=rollback, stop=stop)
+    shares = ft.get_data(QTD_URI, "circulation_a", start=rollback, stop=stop)
+    stom = np.log((volume/shares).rolling(MONTH).sum())
+    stoq = np.log(1/3*(volume/shares).rolling(3*MONTH).sum())
+    stoa = np.log(1/12*(volume/shares).rolling(12*MONTH).sum())
+    return (0.35 * stom + 0.35 * stoq + 0.3 * stoa).loc[start:stop]
+
+def get_leverage(
+    start: str, stop: str,
+) -> pd.DataFrame:
+    trading_days = ft.get_trading_days(QTD_URI, start, stop)
+    price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
+    shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
+    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
+    me = price * shares * adjfactor
+    pe = ft.get_data(FIN_URI, 'equity_preferred_stock', start=start, stop=stop)
+    tot_liab = ft.get_data(FIN_URI, 'total_liabilities', start=start, stop=stop)
+    cur_liab = ft.get_data(FIN_URI, 'current_liabilities', start=start, stop=stop)
+    ld = tot_liab - cur_liab
+    mlev = (me + pe + ld) / me
+    tot_assets = ft.get_data(FIN_URI, 'total_assets', start=start, stop=stop)
+    dtoa = tot_liab / tot_assets
+    be = ft.get_data(FIN_URI, 'paid_in_capital', start=start, stop=stop)
+    blev = (be + pe + ld) / be
+    return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).reindex(trading_days).ffill()
