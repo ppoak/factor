@@ -1,5 +1,6 @@
 """
 Referring to BARRA-USE5, more explaination at: https://zhuanlan.zhihu.com/p/31412967
+About how to construct the regression and how to solve, refer to https://zhuanlan.zhihu.com/p/39922829
 """
 
 import numpy as np
@@ -11,6 +12,7 @@ from joblib import Parallel, delayed
 
 QTD_URI = '/home/data/quotes-day'
 IDXQTD_URI = '/home/data/index-quotes-day'
+IDS_URI = "/home/data/industry-info"
 FIN_URI = '/home/data/financial'
 
 YEAR = 252
@@ -18,6 +20,9 @@ MONTH = 21
 
 INDEX_CODE = "000985.XSHG"
 
+
+def get_industry(start: str, stop: str) -> pd.DataFrame:
+    return ft.get_data(IDS_URI, "third_industry_name", start=start, stop=stop)
 
 def get_logsize(start: str, stop: str) -> pd.DataFrame:
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
@@ -132,19 +137,6 @@ def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
     )
     return ft.zscore(ft.stdoutlier(pd.concat(nlsize, axis=1).T.loc[start:stop], 3))
 
-def get_ep(
-    start: str, stop: str,
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
-    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
-    shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
-    price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
-    adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
-    value = price * adjfactor * shares
-    net_profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop)
-    net_profit = net_profit.reindex(trading_days).ffill()
-    return (net_profit / value).loc[start:stop]
-
 def get_bp(
     start: str, stop: str,
 ) -> pd.DataFrame:
@@ -158,6 +150,7 @@ def get_bp(
     totol_equity = totol_equity.reindex(trading_days).ffill()
     return (totol_equity / value).loc[start:stop]
 
+<<<<<<< HEAD
 def get_roa(
     start: str, stop: str,
 ) -> pd.DataFrame:
@@ -220,3 +213,5 @@ def get_leverage(
     be = ft.get_data(FIN_URI, 'paid_in_capital', start=start, stop=stop)
     blev = (be + pe + ld) / be
     return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).reindex(trading_days).ffill()
+=======
+>>>>>>> ce66ddce26293cca228c03c471bd63c93757c82a
