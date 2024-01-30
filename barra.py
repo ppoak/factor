@@ -23,9 +23,16 @@ MONTH = 21
 INDEX_CODE = "000985.XSHG"
 CODE_LEVEL = "order_book_id"
 DATE_LEVEL = "date"
-FACTORS = ["industry", "logsize", "beta", 
-    "momentum", "volatility", "nonlinear_size",
+FACTORS = [
+    "industry", 
+    "logsize", 
+    "beta", 
+    "momentum", 
+    "volatility", 
+    "nonlinear_size",
     "bp",
+    "liquidity",
+    "leverage"
 ]
 
 
@@ -193,24 +200,27 @@ def get_leverage(
     return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).loc[start:stop]
 
 def regression(start: str, stop: str, ptype: str = "open"):
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 1)
+    rollback = ft.get_trading_days_rollback(QTD_URI, stop, -1)
     qtd = quool.PanelTable(QTD_URI)
-    qtd_data = qtd.read([ptype, "adjfactor"], start=rollback, stop=stop)
+    qtd_data = qtd.read([ptype, "adjfactor"], start=start, stop=rollback)
     price = qtd_data[ptype] * qtd_data["adjfactor"]
-    returns = (price.groupby(CODE_LEVEL).shift(-1) / price - 1)
+    returns = (price.groupby(CODE_LEVEL).shift(-1) / price - 1).dropna()
     
     barra_table = quool.PanelTable(BARRA_URI)
     factors = barra_table.read(FACTORS, start=start, stop=stop)
+    factors = factors.replace([np.inf, -np.inf], pd.NA).dropna()
 
     size = np.sqrt(np.exp(factors["logsize"]))
     size = size.groupby(CODE_LEVEL, group_keys=False).apply(lambda x: x / x.sum())
+    reg_dates = factors.index.get_level_values(DATE_LEVEL).unique()
 
     def _reg(x, y, sz):
-        ids = pd.get_dummies(x["industry"]).drop(None, axis=1)
-        sty = x[FACTORS[1:]]
-        x = sm.add_constant(pd.concat([ids.iloc[:, :-1], sty], axis=1).iloc[:, :-1])
+        ids = pd.get_dummies(x["industry"])
+        sty = x.iloc[:, 1:]
+        x = sm.add_constant(pd.concat([ids, sty], axis=1))
         x.columns = ["country"] + x.columns[1:].tolist()
-        v = np.diag(sz)
+        x = x.astype('float')
+        v = np.diag(sz).astype('float')
         si = [sz[ids[col]].sum() for col in ids.columns]
         r = np.eye(ids.columns.size + sty.columns.size)
         r = np.concatenate([
@@ -222,13 +232,12 @@ def regression(start: str, stop: str, ptype: str = "open"):
             r @ np.linalg.inv(r.T @ x.values.T @ v @ x.values @ r) @ r.T @ x.values.T @ v,
             index=x.columns, columns=x.index
         )
+        return (factor_weights * y).sum(axis=1)
 
-    factor_return = Parallel(n_jobs=1, backend="loky")(delayed(_reg)(
+    factor_returns = Parallel(n_jobs=1, backend="loky")(delayed(_reg)(
             factors.xs(date, level=DATE_LEVEL), 
             returns.xs(date, level=DATE_LEVEL), 
             size.xs(date, level=DATE_LEVEL)
-        ) for date in factors.index.get_level_values(DATE_LEVEL).unique()
+        ) for date in reg_dates
     )
-
-if __name__ =="__main__":
-    print(get_leverage('20240101', '20240102'))
+    return pd.concat(factor_returns, axis=1, keys=reg_dates).T
