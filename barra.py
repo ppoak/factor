@@ -30,7 +30,7 @@ FACTORS = ["industry", "logsize", "beta",
 
 
 def get_industry(start: str, stop: str) -> pd.DataFrame:
-    return ft.get_data(IDS_URI, "third_industry_name", start=start, stop=stop)
+    return ft.get_data(IDS_URI, "first_industry_name", start=start, stop=stop)
 
 def get_logsize(start: str, stop: str) -> pd.DataFrame:
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
@@ -148,7 +148,7 @@ def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
 def get_bp(
     start: str, stop: str,
 ) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 250)
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
     trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
     price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
@@ -214,7 +214,7 @@ def regression(start: str, stop: str, ptype: str = "open"):
             [[0] + [-si[i] / si[-1] for i in range(len(si) - 1)] + [0] * sty.columns.size], 
             r[ids.columns.size:]
         ], axis=0)
-        return pd.DataFrame(
+        factor_weights = pd.DataFrame(
             r @ np.linalg.inv(r.T @ x.values.T @ v @ x.values @ r) @ r.T @ x.values.T @ v,
             index=x.columns, columns=x.index
         )
