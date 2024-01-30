@@ -158,15 +158,13 @@ def get_bp(
     totol_equity = totol_equity.reindex(trading_days).ffill()
     return (totol_equity / value).loc[start:stop]
 
-def get_liquidity(
-    start: str, stop: str,
-) -> pd.DataFrame:
+def get_liquidity(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
-    volume = ft.get_data(QTD_URI, 'volume', start=rollback, stop=stop)
+    volume = ft.get_data(QTD_URI, 'volume', start=rollback, stop=stop) * 100
     shares = ft.get_data(QTD_URI, "circulation_a", start=rollback, stop=stop)
-    stom = np.log((volume/shares).rolling(MONTH).sum())
-    stoq = np.log(1/3*(volume/shares).rolling(3*MONTH).sum())
-    stoa = np.log(1/12*(volume/shares).rolling(12*MONTH).sum())
+    stom = np.log((volume / shares).rolling(MONTH).sum())
+    stoq = np.log(1 / 3 * (volume / shares).rolling(3 * MONTH).sum())
+    stoa = np.log(1 / 12 * (volume / shares).rolling(12 * MONTH).sum())
     return (0.35 * stom + 0.35 * stoq + 0.3 * stoa).loc[start:stop]
 
 def get_leverage(
