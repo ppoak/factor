@@ -171,21 +171,26 @@ def get_leverage(
     start: str, stop: str,
 ) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
-    trading_days = ft.get_trading_days(QTD_URI, start, stop)
+    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
     price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
     me = price * shares * adjfactor
-    pe = ft.get_data(FIN_URI, 'equity_preferred_stock', start=rollback, stop=stop).fillna(0)
+    pe = ft.get_data(FIN_URI, 'equity_preferred_stock', start=rollback, stop=stop)
     tot_liab = ft.get_data(FIN_URI, 'total_liabilities', start=rollback, stop=stop)
     cur_liab = ft.get_data(FIN_URI, 'current_liabilities', start=rollback, stop=stop)
+    pe = pe.reindex(trading_days).ffill().fillna(0)
+    tot_liab = tot_liab.reindex(trading_days).ffill().fillna(0)
+    cur_liab = cur_liab.reindex(trading_days).ffill().fillna(0)
     ld = tot_liab - cur_liab
     mlev = (me + pe + ld) / me
     tot_assets = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop)
+    tot_assets = tot_assets.reindex(trading_days).ffill().fillna(0)
     dtoa = tot_liab / tot_assets
     be = ft.get_data(FIN_URI, 'paid_in_capital', start=rollback, stop=stop)
+    be = be.reindex(trading_days).ffill().fillna(0)
     blev = (be + pe + ld) / be
-    return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).reindex(trading_days).ffill()
+    return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).loc[start:stop]
 
 def regression(start: str, stop: str, ptype: str = "open"):
     rollback = ft.get_trading_days_rollback(QTD_URI, start, 1)
@@ -226,4 +231,4 @@ def regression(start: str, stop: str, ptype: str = "open"):
     )
 
 if __name__ =="__main__":
-    print(get_bp('20210101', '20240101'))
+    print(get_leverage('20240101', '20240102'))
