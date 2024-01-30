@@ -3,6 +3,7 @@ Referring to BARRA-USE5, more explaination at: https://zhuanlan.zhihu.com/p/3141
 About how to construct the regression and how to solve, refer to https://zhuanlan.zhihu.com/p/39922829
 """
 
+import quool
 import numpy as np
 import factor as ft
 import pandas as pd
@@ -10,6 +11,7 @@ import statsmodels.api as sm
 from joblib import Parallel, delayed
 
 
+BARRA_URI = "/home/data/barra"
 QTD_URI = '/home/data/quotes-day'
 IDXQTD_URI = '/home/data/index-quotes-day'
 IDS_URI = "/home/data/industry-info"
@@ -19,6 +21,12 @@ YEAR = 252
 MONTH = 21
 
 INDEX_CODE = "000985.XSHG"
+CODE_LEVEL = "order_book_id"
+DATE_LEVEL = "date"
+FACTORS = ["industry", "logsize", "beta", 
+    "momentum", "volatility", "nonlinear_size",
+    "bp",
+]
 
 
 def get_industry(start: str, stop: str) -> pd.DataFrame:
@@ -150,3 +158,40 @@ def get_bp(
     totol_equity = totol_equity.reindex(trading_days).ffill()
     return (totol_equity / value).loc[start:stop]
 
+def regression(start: str, stop: str, ptype: str = "open"):
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, 1)
+    qtd = quool.PanelTable(QTD_URI)
+    qtd_data = qtd.read([ptype, "adjfactor"], start=rollback, stop=stop)
+    price = qtd_data[ptype] * qtd_data["adjfactor"]
+    returns = (price.groupby(CODE_LEVEL).shift(-1) / price - 1)
+    
+    barra_table = quool.PanelTable(BARRA_URI)
+    factors = barra_table.read(FACTORS, start=start, stop=stop)
+
+    size = np.sqrt(np.exp(factors["logsize"]))
+    size = size.groupby(CODE_LEVEL, group_keys=False).apply(lambda x: x / x.sum())
+
+    def _reg(x, y, sz):
+        ids = pd.get_dummies(x["industry"]).drop(None, axis=1)
+        sty = x[FACTORS[1:]]
+        x = sm.add_constant(pd.concat([ids.iloc[:, :-1], sty], axis=1).iloc[:, :-1])
+        x.columns = ["country"] + x.columns[1:].tolist()
+        v = np.diag(sz)
+        si = [sz[ids[col]].sum() for col in ids.columns]
+        r = np.eye(ids.columns.size + sty.columns.size)
+        r = np.concatenate([
+            r[:ids.columns.size],
+            [[0] + [-si[i] / si[-1] for i in range(len(si) - 1)] + [0] * sty.columns.size], 
+            r[ids.columns.size:]
+        ], axis=0)
+        return pd.DataFrame(
+            r @ np.linalg.inv(r.T @ x.values.T @ v @ x.values @ r) @ r.T @ x.values.T @ v,
+            index=x.columns, columns=x.index
+        )
+
+    factor_return = Parallel(n_jobs=1, backend="loky")(delayed(_reg)(
+            factors.xs(date, level=DATE_LEVEL), 
+            returns.xs(date, level=DATE_LEVEL), 
+            size.xs(date, level=DATE_LEVEL)
+        ) for date in factors.index.get_level_values(DATE_LEVEL).unique()
+    )

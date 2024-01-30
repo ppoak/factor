@@ -100,7 +100,8 @@ def save_data(
     table = quool.PanelTable(uri, 
         code_level=code_level, date_level=date_level)
     if isinstance(data, pd.DataFrame):
-        data = data.stack().reorder_levels([code_level, date_level])
+        data = data.stack().swaplevel()
+        data.index.names = [code_level, date_level]
     data.name = name
     if name in table.columns:
         table.update(data)
