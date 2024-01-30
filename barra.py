@@ -106,8 +106,8 @@ def get_hsigma(start: str, stop: str):
         x = x.dropna()
         y = y.dropna()
         idx = x.index.intersection(y.index)
-        x = x.loc[idx]
-        y = y.loc[idx]
+        x = x.loc[idx].astype('float')
+        y = y.loc[idx].astype('float')
         if x.empty or y.empty:
             return pd.Series(index=y.index, name=y.name)
         model = sm.OLS(y, sm.add_constant(x)).fit()
@@ -132,8 +132,8 @@ def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
         x = x.dropna()
         y = y.dropna()
         idx = x.index.intersection(y.index)
-        x = x.loc[idx]
-        y = y.loc[idx]
+        x = x.loc[idx].astype('float')
+        y = y.loc[idx].astype('float')
         if x.empty or y.empty:
             return pd.Series(index=y.index, name=y.name)
         model = sm.OLS(y, sm.add_constant(x)).fit()
