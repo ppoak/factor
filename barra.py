@@ -168,6 +168,7 @@ def get_bp(
 def get_liquidity(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
     volume = ft.get_data(QTD_URI, 'volume', start=rollback, stop=stop) * 100
+    volume = volume.replace(0, pd.NA)
     shares = ft.get_data(QTD_URI, "circulation_a", start=rollback, stop=stop)
     stom = np.log((volume / shares).rolling(MONTH).sum())
     stoq = np.log(1 / 3 * (volume / shares).rolling(3 * MONTH).sum())
@@ -208,7 +209,6 @@ def regression(start: str, stop: str, ptype: str = "open"):
     
     barra_table = quool.PanelTable(BARRA_URI)
     factors = barra_table.read(FACTORS, start=start, stop=stop)
-    factors = factors.replace([np.inf, -np.inf], pd.NA).dropna()
 
     size = np.sqrt(np.exp(factors["logsize"]))
     size = size.groupby(CODE_LEVEL, group_keys=False).apply(lambda x: x / x.sum())
