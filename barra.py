@@ -2,7 +2,7 @@
 Referring to BARRA-USE5, more explaination at: https://zhuanlan.zhihu.com/p/31412967
 About how to construct the regression and how to solve, refer to https://zhuanlan.zhihu.com/p/39922829
 """
-
+import math
 import quool
 import numpy as np
 import factor as ft
@@ -176,19 +176,14 @@ def get_leverage(
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
     adjfactor = ft.get_data(QTD_URI, "adjfactor", start=start, stop=stop)
     me = price * shares * adjfactor
-    pe = ft.get_data(FIN_URI, 'equity_preferred_stock', start=rollback, stop=stop)
-    tot_liab = ft.get_data(FIN_URI, 'total_liabilities', start=rollback, stop=stop)
-    cur_liab = ft.get_data(FIN_URI, 'current_liabilities', start=rollback, stop=stop)
-    pe = pe.reindex(trading_days).ffill().fillna(0)
-    tot_liab = tot_liab.reindex(trading_days).ffill().fillna(0)
-    cur_liab = cur_liab.reindex(trading_days).ffill().fillna(0)
+    pe = ft.get_data(FIN_URI, 'equity_preferred_stock', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
+    tot_liab = ft.get_data(FIN_URI, 'total_liabilities', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
+    cur_liab = ft.get_data(FIN_URI, 'current_liabilities', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
     ld = tot_liab - cur_liab
     mlev = (me + pe + ld) / me
-    tot_assets = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop)
-    tot_assets = tot_assets.reindex(trading_days).ffill().fillna(0)
+    tot_assets = ft.get_data(FIN_URI, 'total_assets', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
     dtoa = tot_liab / tot_assets
-    be = ft.get_data(FIN_URI, 'paid_in_capital', start=rollback, stop=stop)
-    be = be.reindex(trading_days).ffill().fillna(0)
+    be = ft.get_data(FIN_URI, 'paid_in_capital', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
     blev = (be + pe + ld) / be
     return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).loc[start:stop]
 
@@ -230,5 +225,40 @@ def regression(start: str, stop: str, ptype: str = "open"):
         ) for date in factors.index.get_level_values(DATE_LEVEL).unique()
     )
 
+def get_earning_yield(
+    start: str,
+    stop: str
+) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
+    price = ft.get_data(QTD_URI, 'close', start=start, stop=stop)
+    share = ft.get_data(QTD_URI, 'circulation_a', start=start, stop=stop)
+    adjfactor = ft.get_data(QTD_URI, 'adjfactor', start=start, stop=stop)
+    me = price * share * adjfactor
+    profit_ttm = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop).ffill()
+    cash_ttm = ft.get_data(FIN_URI, 'net_inc_cash_and_equivalents', start=rollback, stop=stop).ffill()
+    cetop = cash_ttm / me
+    etop = profit_ttm / me
+    return 0.21 * cetop + 0.11 * etop
+
+def get_growth(
+    start: str,
+    stop: str
+) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, 5*YEAR)
+    days = pd.date_range(rollback, stop)
+    years = math.floor(len(days)/365)
+    profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop).reindex(days).ffill()
+    revenue= ft.get_data(FIN_URI, 'operating_revenue', start=rollback, stop=stop).reindex(days).ffill()
+    year_point = []
+    for i in range(years, -1, -1):
+        year_point.append(pd.to_datetime(stop) - pd.DateOffset(years=i))
+    egro = profit.reindex(year_point).pct_change(fill_method=None).rolling(5).mean()
+    sgro = revenue.reindex(year_point).pct_change(fill_method=None).rolling(5).mean()
+    print(revenue.reindex(year_point).pct_change(fill_method=None))
+    return 0.24 * egro + 0.47 * sgro
+
+
+
 if __name__ =="__main__":
-    print(get_leverage('20240101', '20240102'))
+    pd.set_option('display.max_rows', None)
+    get_growth('20191201', '20231112')
