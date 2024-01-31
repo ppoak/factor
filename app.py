@@ -18,21 +18,22 @@ DATE_LEVEL = 'date'
 QTD_URI = "/home/data/quotes-day"
 IDXWGT_URI = "/home/data/index-weights"
 BENCHMARK_URI = '/home/data/index-quotes-day'
-BARRA_URI = "/home/data/barra"
 FACTOR_URI = "/home/data/factor"
 
 TODAY_STR = datetime.datetime.now().strftime(r"%Y%m%d")
 YESTERDAY_STR = ft.get_trading_days_rollback(QTD_URI, TODAY_STR, 1).strftime(r"%Y%m%d")
 FACTOR_INFO = {
-    "logsize": {"module": barra, "uri": BARRA_URI},
-    "momentum_20d": {"module": barra, "uri": BARRA_URI},
-    "volatility_20d": {"module": barra, "uri": BARRA_URI},
-    "ep": {"module": barra, "uri": BARRA_URI},
-    "bp": {"module": barra, "uri": BARRA_URI},
-    "roa": {"module": barra, "uri": BARRA_URI},
-    "roe": {"module": barra, "uri": BARRA_URI},
-    "current_asset_ratio": {"module": barra, "uri": BARRA_URI},
-    "tail_volume_percent": {"module": highfreq, "uri": FACTOR_URI}
+    "industry": {"module": barra, "uri": barra.BARRA_URI}, 
+    "logsize": {"module": barra, "uri": barra.BARRA_URI}, 
+    "beta": {"module": barra, "uri": barra.BARRA_URI}, 
+    "momentum": {"module": barra, "uri": barra.BARRA_URI}, 
+    "volatility": {"module": barra, "uri": barra.BARRA_URI}, 
+    "nonlinear_size": {"module": barra, "uri": barra.BARRA_URI},
+    "volatility": {"module": barra, "uri": barra.BARRA_URI},
+    "nonlinear_size": {"module": barra, "uri": barra.BARRA_URI},
+    "bp": {"module": barra, "uri": barra.BARRA_URI},
+    "liquidity": {"module": barra, "uri": barra.BARRA_URI},
+    "leverage": {"module": barra, "uri": barra.BARRA_URI},
 }
 
 def factor_performance(
@@ -122,8 +123,8 @@ def parsearg():
 if __name__ == "__main__":
     args = parsearg()
     if args.dump:
-        start = args.start or YESTERDAY_STR
-        stop = args.stop or YESTERDAY_STR
+        start = args.start or TODAY_STR
+        stop = args.stop or TODAY_STR
         for factor in FACTOR_INFO.keys():
             dump(factor, start, stop)
     elif args.test:

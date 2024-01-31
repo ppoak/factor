@@ -55,8 +55,12 @@ def get_trading_days(
     return trading_days
 
 def get_trading_days_rollback(uri: str, date: str, shift: int) -> pd.DatetimeIndex:
-    trading_days = get_trading_days(uri, start=None, stop=date)
-    rollback = trading_days[trading_days <= date][-shift - 1]
+    if shift > 0:
+        trading_days = get_trading_days(uri, start=None, stop=date)
+        rollback = trading_days[trading_days <= date][-shift - 1]
+    else:
+        trading_days = get_trading_days(uri, start=date, stop=None)
+        rollback = trading_days[min(len(trading_days), -shift)]
     return rollback
 
 def get_price(
@@ -100,7 +104,7 @@ def save_data(
     table = quool.PanelTable(uri, 
         code_level=code_level, date_level=date_level)
     if isinstance(data, pd.DataFrame):
-        data = data.stack().swaplevel()
+        data = data.stack(dropna=True).swaplevel()
         data.index.names = [code_level, date_level]
     data.name = name
     if name in table.columns:
