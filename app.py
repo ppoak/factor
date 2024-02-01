@@ -48,7 +48,7 @@ def factor_performance(
     start = factor_data.index.min()
     stop = factor_data.index.max()
     logger = quool.Logger("FactorTester", display_name=True)
-    result_path = Path(result_path) / factor
+    result_path = Path(result_path)
     result_path.mkdir(parents=True, exist_ok=True)
     price = ft.get_price(QTD_URI, ptype, pool, pool_uri, 
         start, stop, code_level=CODE_LEVEL, date_level=DATE_LEVEL)
