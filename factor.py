@@ -183,7 +183,8 @@ def perform_crosssection(
     image: str | bool = True,
     result: str = None,
 ):
-    crossdate = factor.index[min(crossdate, -rebalance - 1)].strftime(r"%Y-%m-%d")
+    if isinstance(crossdate, int):
+        crossdate = factor.index[min(crossdate, -rebalance - 1)].strftime(r"%Y-%m-%d")
     factor = factor.loc[crossdate]
     if price is not None:
         future_returns = price.shift(-rebalance) / price - 1

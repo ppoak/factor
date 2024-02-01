@@ -42,6 +42,7 @@ def factor_performance(
     rebperiod: int = 20,
     pool: str = None,
     pool_uri: str = None,
+    crossdate: int | str = -1,
     ngroup: int = 10,
     topk: int = 100,
     result_path: str = "report",
@@ -59,7 +60,7 @@ def factor_performance(
     factor_data = factor_data.iloc[::rebperiod]
 
     logger.info("performing cross section test")
-    ft.perform_crosssection(factor_data, price, rebperiod, 
+    ft.perform_crosssection(factor_data, price, rebperiod, crossdate=crossdate,
         image=result_path / 'cross-section.png')
 
     logger.info("performing information coefficiency test")
