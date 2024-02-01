@@ -152,9 +152,7 @@ def get_nonlinear_size(start: str, stop: str) -> pd.DataFrame:
     )
     return ft.zscore(ft.stdoutlier(pd.concat(nlsize, axis=1).T.loc[start:stop], 3))
 
-def get_bp(
-    start: str, stop: str,
-) -> pd.DataFrame:
+def get_bp(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
     trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
     shares = ft.get_data(QTD_URI, "circulation_a", start=start, stop=stop)
@@ -223,7 +221,7 @@ def get_growth(start: str, stop: str) -> pd.DataFrame:
     revenue = revenue.groupby(level=CODE_LEVEL).pct_change(fill_method=None).rolling(5).mean()
     egro = profit.unstack(CODE_LEVEL).reindex(trading_days).ffill().fillna(0)
     sgro = revenue.unstack(CODE_LEVEL).reindex(trading_days).ffill().fillna(0)
-    return 0.24 * egro + 0.47 * sgro
+    return (0.24 * egro + 0.47 * sgro).loc[start:stop]
 
 def regression(start: str, stop: str, ptype: str = "open"):
     rollback = ft.get_trading_days_rollback(QTD_URI, stop, -1)
