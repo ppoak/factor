@@ -42,6 +42,7 @@ def factor_performance(
     rebperiod: int = 20,
     pool: str = None,
     pool_uri: str = None,
+    ngroup: int = 10,
     topk: int = 100,
     result_path: str = "report",
 ):
@@ -66,7 +67,7 @@ def factor_performance(
         image=result_path / 'information-coefficient.png')
 
     logger.info("performing backtest")
-    ft.perform_backtest(factor_data, price, topk=topk,
+    ft.perform_backtest(factor_data, price, topk=topk, ngroup=ngroup,
         benchmark=benchmark, image=result_path / 'backtest.png')
 
 def dump(factor: str, start: str, stop: str):
