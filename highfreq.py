@@ -38,7 +38,9 @@ def get_realized_skew(start: str, stop: str) -> pd.DataFrame:
         _return2 = _return ** 2
         _return3 = _return ** 3
         result = _return3.resample('d').sum() / (_return2.resample('d').sum() ** 1.5)
-        return np.sqrt(MIN - 1) / WEEK * result.sum()
+        result = np.sqrt(MIN - 1) / WEEK * result.sum()
+        result.name = pd.to_datetime(_data.index[-1].strftime('%Y%m%d'))
+        return result
 
     rollback = ft.get_trading_days_rollback(QTD_URI, start, WEEK)
     trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
