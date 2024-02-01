@@ -175,9 +175,7 @@ def get_liquidity(start: str, stop: str) -> pd.DataFrame:
     stoa = np.log(1 / 12 * (volume / shares).rolling(12 * MONTH).sum())
     return (0.35 * stom + 0.35 * stoq + 0.3 * stoa).loc[start:stop]
 
-def get_leverage(
-    start: str, stop: str,
-) -> pd.DataFrame:
+def get_leverage(start: str, stop: str) -> pd.DataFrame:
     rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
     trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
     price = ft.get_data(QTD_URI, "close", start=start, stop=stop)
@@ -194,6 +192,38 @@ def get_leverage(
     be = ft.get_data(FIN_URI, 'paid_in_capital', start=rollback, stop=stop).reindex(trading_days).ffill().fillna(0)
     blev = (be + pe + ld) / be
     return (0.38 * mlev + 0.35 * dtoa + 0.27 * blev).loc[start:stop]
+
+def get_earning_yield(start: str, stop: str) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
+    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
+    price = ft.get_data(QTD_URI, 'close', start=start, stop=stop)
+    share = ft.get_data(QTD_URI, 'circulation_a', start=start, stop=stop)
+    adjfactor = ft.get_data(QTD_URI, 'adjfactor', start=start, stop=stop)
+    me = price * share * adjfactor
+    profit_ttm = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop)
+    profit_ttm = profit_ttm.reindex(trading_days).ffill()
+    ocash = ft.get_data(FIN_URI, 'cash_flow_from_operating_activities', start=rollback, stop=stop)
+    icash = ft.get_data(FIN_URI, 'cash_flow_from_investing_activities', start=rollback, stop=stop)
+    fcash = ft.get_data(FIN_URI, 'cash_flow_from_financing_activities', start=rollback, stop=stop)
+    ocash = ocash.reindex(trading_days).ffill().fillna(0)
+    icash = icash.reindex(trading_days).ffill().fillna(0)
+    fcash = fcash.reindex(trading_days).ffill().fillna(0)
+    cash = ocash + icash + fcash
+    cetop = cash / me
+    etop = profit_ttm / me
+    return (0.21 * cetop + 0.11 * etop).loc[start:stop]
+
+def get_growth(start: str, stop: str) -> pd.DataFrame:
+    rollback = ft.get_trading_days_rollback(QTD_URI, start, 5 * YEAR)
+    trading_days = ft.get_trading_days(QTD_URI, rollback, stop)
+    fin = quool.PanelTable('/home/data/financial')
+    profit = fin.read('net_profit', start=rollback, stop=stop).squeeze().dropna()
+    profit = profit.groupby(level=CODE_LEVEL).pct_change(fill_method=None).rolling(5).mean()
+    revenue = fin.read('operating_revenue', start=rollback, stop=stop).squeeze().dropna()
+    revenue = revenue.groupby(level=CODE_LEVEL).pct_change(fill_method=None).rolling(5).mean()
+    egro = profit.unstack(CODE_LEVEL).reindex(trading_days).ffill().fillna(0)
+    sgro = revenue.unstack(CODE_LEVEL).reindex(trading_days).ffill().fillna(0)
+    return 0.24 * egro + 0.47 * sgro
 
 def regression(start: str, stop: str, ptype: str = "open"):
     rollback = ft.get_trading_days_rollback(QTD_URI, stop, -1)
@@ -235,39 +265,3 @@ def regression(start: str, stop: str, ptype: str = "open"):
             size.xs(date, level=DATE_LEVEL)
         ) for date in reg_dates
     )
-
-def get_earning_yield(
-    start: str,
-    stop: str
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, YEAR)
-    price = ft.get_data(QTD_URI, 'close', start=start, stop=stop)
-    share = ft.get_data(QTD_URI, 'circulation_a', start=start, stop=stop)
-    adjfactor = ft.get_data(QTD_URI, 'adjfactor', start=start, stop=stop)
-    me = price * share * adjfactor
-    profit_ttm = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop).ffill()
-    cash_ttm = ft.get_data(FIN_URI, 'net_inc_cash_and_equivalents', start=rollback, stop=stop).ffill()
-    cetop = cash_ttm / me
-    etop = profit_ttm / me
-    return 0.21 * cetop + 0.11 * etop
-
-def get_growth(
-    start: str,
-    stop: str
-) -> pd.DataFrame:
-    rollback = ft.get_trading_days_rollback(QTD_URI, start, 5*YEAR)
-    days = pd.date_range(rollback, stop)
-    years = math.floor(len(days)/365)
-    profit = ft.get_data(FIN_URI, 'net_profit', start=rollback, stop=stop).reindex(days).ffill()
-    revenue= ft.get_data(FIN_URI, 'operating_revenue', start=rollback, stop=stop).reindex(days).ffill()
-    year_point = []
-    for i in range(years, -1, -1):
-        year_point.append(pd.to_datetime(stop) - pd.DateOffset(years=i))
-    egro = profit.reindex(year_point).pct_change(fill_method=None).rolling(5).mean()
-    sgro = revenue.reindex(year_point).pct_change(fill_method=None).rolling(5).mean()
-    return 0.24 * egro + 0.47 * sgro
-
-
-
-if __name__ =="__main__":
-    pass
