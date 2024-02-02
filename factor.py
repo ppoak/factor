@@ -261,7 +261,8 @@ def perform_backtest(
 
     # topk test
     topks = factor.rank(ascending=False, axis=1) < topk
-    topks = factor.mask(topks, 1 / topk).mask(~topks, 0)
+    topks = factor.where(topks)
+    topks = topks.div(topks.sum(axis=1), axis=0)
     topk_result = quool.weight_strategy(topks, price, 1, 'both', 
         commission, benchmark, False, None)
     topk_evaluation = topk_result['evaluation']
