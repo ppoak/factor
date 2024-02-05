@@ -177,17 +177,18 @@ def log(df: pd.DataFrame, base: int = 10):
 def perform_crosssection(
     factor: pd.DataFrame,
     price: pd.DataFrame = None,
-    rebalance: int = 5,
+    delay: int = 1,
     crossdate: str | int = -1,
     rank: bool = False,
     image: str | bool = True,
     result: str = None,
 ):
+    price = price.shift(-delay).loc[factor.index]
     if isinstance(crossdate, int):
-        crossdate = factor.index[min(crossdate, -rebalance - 1)].strftime(r"%Y-%m-%d")
+        crossdate = factor.index[crossdate].strftime(r"%Y-%m-%d")
     factor = factor.loc[crossdate]
     if price is not None:
-        future_returns = price.shift(-rebalance) / price - 1
+        future_returns = price.shift(-1) / price - 1
         future_returns = future_returns.loc[crossdate]
     else:
         future_returns = pd.Series(index=factor.index)
@@ -212,12 +213,13 @@ def perform_crosssection(
 def perform_inforcoef(
     factor: pd.DataFrame,
     price: pd.DataFrame,
-    rebalance: int = 5,
+    delay: int = 1,
     method: str = 'pearson',
     image: str | bool = True,
     result: str = None,
 ):
-    future_returns = price.shift(-rebalance) / price - 1
+    price = price.shift(-delay).loc[factor.index]
+    future_returns = price.shift(-1) / price - 1
     inforcoef = factor.corrwith(future_returns, axis=1, method=method).dropna()
     inforcoef.name = f"infocoef"
     if image is not None:
@@ -237,6 +239,7 @@ def perform_inforcoef(
 def perform_backtest(
     factor: pd.DataFrame,
     price: pd.DataFrame,
+    delay: int = 1,
     topk: int = 100,
     benchmark: pd.Series = None,
     ngroup: int = 5,
@@ -250,7 +253,7 @@ def perform_backtest(
     ngroup_result = Parallel(n_jobs=n_jobs, backend='loky')(
         delayed(quool.weight_strategy)(
             groups.where(groups == i).div(groups.where(groups == i).sum(axis=1), axis=0), 
-            price, 1, 'both', commission, benchmark, False, None
+            price, delay, 'both', commission, benchmark, False, None
     ) for i in range(1, ngroup + 1))
     ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
         axis=1, keys=range(1, ngroup + 1)).add_prefix('group')
@@ -263,7 +266,7 @@ def perform_backtest(
     topks = factor.rank(ascending=False, axis=1) < topk
     topks = factor.where(topks)
     topks = topks.div(topks.sum(axis=1), axis=0)
-    topk_result = quool.weight_strategy(topks, price, 1, 'both', 
+    topk_result = quool.weight_strategy(topks, price, delay, 'both', 
         commission, benchmark, False, None)
     topk_evaluation = topk_result['evaluation']
     topk_value = topk_result['value']

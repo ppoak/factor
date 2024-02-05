@@ -39,6 +39,7 @@ FACTOR_INFO = {
 def factor_performance(
     factor_data: pd.DataFrame,
     ptype: str = 'open',
+    delay: int = 1,
     rebperiod: int = 20,
     pool: str = None,
     pool_uri: str = None,
@@ -60,15 +61,15 @@ def factor_performance(
     factor_data = factor_data.iloc[::rebperiod]
 
     logger.info("performing cross section test")
-    ft.perform_crosssection(factor_data, price, rebperiod, crossdate=crossdate,
+    ft.perform_crosssection(factor_data, price, delay, crossdate=crossdate,
         image=result_path / 'cross-section.png')
 
     logger.info("performing information coefficiency test")
-    ft.perform_inforcoef(factor_data, price, rebperiod, 
+    ft.perform_inforcoef(factor_data, price, delay,  
         image=result_path / 'information-coefficient.png')
 
     logger.info("performing backtest")
-    ft.perform_backtest(factor_data, price, topk=topk, ngroup=ngroup,
+    ft.perform_backtest(factor_data, price, delay, topk=topk, ngroup=ngroup,
         benchmark=benchmark, image=result_path / 'backtest.png')
 
 def dump(factor: str, start: str, stop: str):
