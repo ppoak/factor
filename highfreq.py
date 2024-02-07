@@ -45,7 +45,6 @@ def get_realized_skew(start: str, stop: str) -> pd.DataFrame:
         (_date) for _date in tqdm(trading_days)), axis=1).T.loc[start:stop]
     
 def get_realized_kurt(start: str, stop: str) -> pd.DataFrame:
-    tasks = []
     def _get(_start, _stop):
         _data = ft.get_data(QTM_URI, "close", start=_start, stop=_stop + pd.Timedelta(days=1))
         _return = _data.pct_change(fill_method=None)
@@ -54,5 +53,23 @@ def get_realized_kurt(start: str, stop: str) -> pd.DataFrame:
     trading_days = ft.get_trading_days(QTD_URI, start, stop)
     tasks = [(trading_days[WEEK*i:WEEK*(i+1)][0], trading_days[WEEK*i:WEEK*(i+1)][-1]) for i in range((len(trading_days) // WEEK)+1)]
     return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
-            (_start, _stop) for _start, _stop in tqdm(tasks)), axis=0)  
+            (_start, _stop) for _start, _stop in tqdm(tasks)), axis=0)
 
+def get_long_short_ratio(start: str, stop: str):
+    def _get(_date):
+        _price = ft.get_data(QTM_URI, "close", start=_date, stop=_date + pd.Timedelta(days=1))
+        _vol = ft.get_data(QTM_URI, "volume", start=_date, stop=_date + + pd.Timedelta(days=1))
+        _return = _price.pct_change(fill_method=None)
+        _vol_per_unit = abs(0.0001/_return * _vol).replace([np.inf, -np.inf], np.nan)
+        _1 = _vol_per_unit.mean()
+        _day_return = (_price.iloc[-1] - _price.iloc[0]) / _price.iloc[0]
+        res = (abs(_day_return / 0.0001) * _1) / _vol.sum()
+        res.name = _date
+        return res
+        
+    trading_days = ft.get_trading_days(QTD_URI, start, stop) 
+    return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
+        (_date) for _date in tqdm(trading_days)), axis=1).T.loc[start:stop]
+
+if __name__ == "__main__":
+    print(get_long_short_ratio('20230606','20230610'))
