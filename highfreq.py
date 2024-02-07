@@ -55,7 +55,6 @@ def get_realized_kurt(start: str, stop: str) -> pd.DataFrame:
     return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
             (_start, _stop) for _start, _stop in tqdm(tasks)), axis=0)
 
-<<<<<<< HEAD
 def get_long_short_ratio(start: str, stop: str):
     def _get(_date):
         _price = ft.get_data(QTM_URI, "close", start=_date, stop=_date + pd.Timedelta(days=1))
@@ -72,9 +71,6 @@ def get_long_short_ratio(start: str, stop: str):
     return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
         (_date) for _date in tqdm(trading_days)), axis=1).T.loc[start:stop]
 
-if __name__ == "__main__":
-    print(get_long_short_ratio('20230606','20230610'))
-=======
 def get_price_volume_corr(start: str, stop: str) -> pd.DataFrame:
     def _get(_date):
         _price = ft.get_data(QTM_URI, "close", start=_date, stop=_date + pd.Timedelta(days=1))
@@ -87,4 +83,3 @@ def get_price_volume_corr(start: str, stop: str) -> pd.DataFrame:
     return pd.concat(Parallel(n_jobs=1, backend='loky')(
         delayed(_get)(_date) for _date in tqdm(trading_days)), axis=1
     ).T.loc[start:stop]
->>>>>>> f7d67f856dcc755cca4cb19d084c15f2e3e1f651
