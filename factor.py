@@ -252,7 +252,7 @@ def perform_backtest(
     groups = factor.apply(lambda x: pd.qcut(x, q=ngroup, labels=False), axis=1) + 1
     ngroup_result = Parallel(n_jobs=n_jobs, backend='loky')(
         delayed(quool.weight_strategy)(
-            groups.where(groups == i).div(groups.where(groups == i).sum(axis=1), axis=0), 
+            (groups.where(groups == i) / groups.where(groups == i)).div(groups.where(groups == i).count(axis=1), axis=0), 
             price, delay, 'both', commission, benchmark, False, None
     ) for i in range(1, ngroup + 1))
     ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
