@@ -56,3 +56,15 @@ def get_realized_kurt(start: str, stop: str) -> pd.DataFrame:
     return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
             (_start, _stop) for _start, _stop in tqdm(tasks)), axis=0)  
 
+def get_price_volume_corr(start: str, stop: str) -> pd.DataFrame:
+    def _get(_date):
+        _price = ft.get_data(QTM_URI, "close", start=_date, stop=_date + pd.Timedelta(days=1))
+        _volume = ft.get_data(QTM_URI, "volume", start=_date, stop=_date + pd.Timedelta(days=1))
+        _result = _price.corrwith(_volume, axis=0).replace([np.inf, -np.inf], np.nan)
+        _result.name = _date
+        return _result
+
+    trading_days = ft.get_trading_days(QTD_URI, start, stop)
+    return pd.concat(Parallel(n_jobs=1, backend='loky')(
+        delayed(_get)(_date) for _date in tqdm(trading_days)), axis=1
+    ).T.loc[start:stop]
