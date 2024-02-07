@@ -58,12 +58,12 @@ def get_realized_kurt(start: str, stop: str) -> pd.DataFrame:
 def get_long_short_ratio(start: str, stop: str):
     def _get(_date):
         _price = ft.get_data(QTM_URI, "close", start=_date, stop=_date + pd.Timedelta(days=1))
-        _vol = ft.get_data(QTM_URI, "volume", start=_date, stop=_date + + pd.Timedelta(days=1))
+        _vol = ft.get_data(QTM_URI, "volume", start=_date, stop=_date + pd.Timedelta(days=1))
         _return = _price.pct_change(fill_method=None)
-        _vol_per_unit = abs(0.0001/_return * _vol).replace([np.inf, -np.inf], np.nan)
+        _vol_per_unit = abs(_vol / _return).replace([np.inf, -np.inf], np.nan)
         _1 = _vol_per_unit.mean()
         _day_return = (_price.iloc[-1] - _price.iloc[0]) / _price.iloc[0]
-        res = (abs(_day_return / 0.0001) * _1) / _vol.sum()
+        res = (abs(_day_return) * _1) / _vol.sum()
         res.name = _date
         return res
         
