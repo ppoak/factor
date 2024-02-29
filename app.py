@@ -61,16 +61,17 @@ def factor_performance(
     factor_data = factor_data.iloc[::rebperiod]
 
     logger.info("performing cross section test")
-    ft.perform_crosssection(factor_data, price, delay, crossdate=crossdate,
+    cross_data = ft.perform_crosssection(factor_data, price, delay, crossdate=crossdate,
         image=result_path / 'cross-section.png')
 
     logger.info("performing information coefficiency test")
-    ft.perform_inforcoef(factor_data, price, delay,  
+    inforcoef = ft.perform_inforcoef(factor_data, price, delay,  
         image=result_path / 'information-coefficient.png')
 
     logger.info("performing backtest")
-    ft.perform_backtest(factor_data, price, delay, topk=topk, ngroup=ngroup,
+    backtest_dict = ft.perform_backtest(factor_data, price, delay, topk=topk, ngroup=ngroup,
         benchmark=benchmark, image=result_path / 'backtest.png')
+    return cross_data, inforcoef, backtest_dict
 
 def dump(factor: str, start: str, stop: str):
     data = getattr(FACTOR_INFO[factor]["module"], f'get_{factor}')(start, stop)
