@@ -249,10 +249,19 @@ def perform_backtest(
     result: str = None,
 ):
     # ngroup test
-    groups = factor.apply(lambda x: pd.qcut(x, q=ngroup, labels=False), axis=1) + 1
-    ngroup_result = Parallel(n_jobs=n_jobs, backend='loky')(
+    try:
+        groups = factor.apply(lambda x: pd.qcut(x, q=ngroup, labels=False), axis=1) + 1
+    except:
+        for date in factor.index:
+            try:
+                pd.qcut(factor.loc[date], q=ngroup, labels=False)
+            except:
+                raise ValueError(f"on date {date}, grouping failed")
+    
+    ngroup_result = Parallel(n_jobs=-1, backend='loky')(
         delayed(quool.weight_strategy)(
-            (groups.where(groups == i) / groups.where(groups == i)).div(groups.where(groups == i).count(axis=1), axis=0), 
+            (groups.where(groups == i) / groups.where(groups == i)).div(
+                groups.where(groups == i).count(axis=1), axis=0).fillna(0), 
             price, delay, 'both', commission, benchmark, False, None
     ) for i in range(1, ngroup + 1))
     ngroup_evaluation = pd.concat([res['evaluation'] for res in ngroup_result], 
@@ -265,7 +274,7 @@ def perform_backtest(
     # topk test
     topks = factor.rank(ascending=False, axis=1) < topk
     topks = factor.where(topks)
-    topks = topks.div(topks.sum(axis=1), axis=0)
+    topks = (topks / topks).div(topks.count(axis=1), axis=0).fillna(0)
     topk_result = quool.weight_strategy(topks, price, delay, 'both', 
         commission, benchmark, False, None)
     topk_evaluation = topk_result['evaluation']
