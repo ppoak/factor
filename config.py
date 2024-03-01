@@ -421,7 +421,7 @@ c.InteractiveShellApp.extensions = ['dashboard']
 
 ## The part of the banner to be printed before the profile
 #  Default: "Python 3.11.0rc1 (main, Aug 12 2022, 10:02:14) [GCC 11.2.0]\nType 'copyright', 'credits' or 'license' for more information\nIPython 8.14.0 -- An enhanced Interactive Python. Type '?' for help.\n"
-c.InteractiveShell.banner1 = "Welcome to factor dashboard! Type %name to see current factor\n"
+c.InteractiveShell.banner1 = "Welcome to factor dashboard!\n"
 
 ## The part of the banner to be printed after the profile
 #  Default: ''
