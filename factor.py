@@ -276,7 +276,7 @@ def perform_backtest(
     topks = factor.where(topks)
     topks = (topks / topks).div(topks.count(axis=1), axis=0).fillna(0)
     topk_result = quool.weight_strategy(topks, price, delay, 'both', 
-        commission, benchmark, False, None)
+        commission, benchmark, None, None)
     topk_evaluation = topk_result['evaluation']
     topk_value = topk_result['value']
     topk_turnover = topk_result['turnover']
