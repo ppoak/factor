@@ -101,9 +101,10 @@ def get_regret(start: str, stop: str) -> pd.DataFrame:
         lcp = (_price.where(lc) * _vol.where(lc)).sum() / _vol.where(lc).sum() / _price.iloc[-1] - 1
         hcp = (_price.where(hc) * _vol.where(hc)).sum() / _vol.where(hc).sum() / _price.iloc[-1] - 1
         res = pd.concat([lcvol, hcvol, lcp, hcp], axis=1, keys=["lcvol", "hcvol", "lcp", "hcp"])
-        res.index = pd.MultiIndex.from_product([[_date], res.index], names=["date", "order_book_id"])
+        res.index = pd.MultiIndex.from_product([res.index, [_date]], names=["order_book_id", "date"])
         return res
 
     trading_days = ft.get_trading_days(QTD_URI, start, stop)
-    return pd.concat(Parallel(n_jobs=-1, backend='loky')(delayed(_get)
-        (date) for date in  tqdm(list(trading_days))), axis=1).T.loc[start:stop]
+    return pd.concat(Parallel(n_jobs=1, backend='loky')(delayed(_get)
+        (date) for date in  tqdm(list(trading_days))), axis=0
+    ).sort_index().loc(axis=0)[:, start:stop]
