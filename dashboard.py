@@ -73,13 +73,20 @@ class FactorMagics(Magics):
         self.shell.user_ns['data'] = data
         self.shell.user_ns['future'] = future
 
-    def get_price(self, ptype: str = "open", start: str = None, stop: str = None):
+    def get_price(
+        self, 
+        ptype: str = "open", 
+        start: str = None, 
+        stop: str = None, 
+        adjust: bool = True
+    ):
         names = [ptype] + ["st", "suspended", "adjfactor"]
         data = self.quotes_table.read(names, start=start, stop=stop)
         stsus = (data['st'] | data['suspended']).fillna(True)
         price = data.loc[:, ptype].where(~stsus)
-        price = price.mul(data['adjfactor'], axis=0).unstack(self.quotes_table._code_level)
-        return price
+        if adjust:
+            price = price.mul(data['adjfactor'], axis=0)
+        return price.unstack(self.quotes_table._code_level)
     
     def get_data(self, name: str, start: str = None, stop: str = None):
         return self.factor_table.read(name, 
@@ -134,7 +141,7 @@ class FactorMagics(Magics):
         image: path to save the image, default to True
         result: path to save the result data, default to None
         """
-        opts, _ = self.parse_options(line, "", "delay=date=rank=image=result=")
+        opts, _ = self.parse_options(line, "", "delay=", "date=", "rank=", "image=", "result=")
         return factor.perform_backtest(
             self.shell.user_ns['data'],
             self.shell.user_ns['price'],
@@ -150,7 +157,7 @@ class FactorMagics(Magics):
         return self.shell.user_ns['spot']
     
     @line_magic
-    def heatmap(self, line):
+    def treemap(self, line):
         """Usage: %heatmap [sort_by] [days] [figsize] [character] [image]
 
         sort_by: select which field to sort, default to circulating_market_cap;
@@ -160,10 +167,11 @@ class FactorMagics(Magics):
         image: path to save the image, default to None;
         """
         opts, _ = self.parse_options(line, "", "sort_by=", "days=", "figsize=", "character=", "image=")
-        df = self.shell.user_ns.get('spot', self.spot(None))
+        df = self.spot(None)
         df = df[["change_rate", "circulating_market_cap", "name"]].copy()
+
         data = self.shell.user_ns.get('data')
-        if data is not None:
+        if data is not None and opts.get('sort_by', None) is not None:
             data = data.iloc[-1]
             data.index = data.index.str.slice(0, 6)
             data = data[~data.index.duplicated(keep='first')]
@@ -171,6 +179,13 @@ class FactorMagics(Magics):
             data += abs(data.min())
             df = pd.concat([df, data], axis=1, join='inner')
             df = df[df != 0].dropna(subset=data.name)
+
+        if int(opts.get('days', 1)) > 1:
+            date = self.shell.user_ns.get['price'].index[-opts['days']]
+            price = self.get_price("close", date, date, False).iloc[-1]
+            price.index = price.index.str.slice(0, 6)
+            df['change_rate'] = (df['latest_price'] / price - 1) * 100
+        
         df = df.loc[df.index.str.startswith("0") | df.index.str.startswith("3") | df.index.str.startswith("6")]
         df = df[df["change_rate"] <= 20]
         df = df.sort_values(by=opts.get('sort_by', 'circulating_market_cap'), ascending=False)
@@ -199,6 +214,35 @@ class FactorMagics(Magics):
             plt.savefig(opts['image'])
         plt.close()
         return df
+    
+    @line_magic
+    def scatter(self, line):
+        """Usage: %scatter [days] [figsize] [image] name
+
+        days: compute n-day return, default None to return to yesterday-close;
+        figsize: the size of the rectangle, default to 20;
+        image: path to save the image, default to None;
+        """
+        opts, name = self.parse_options(line, "", "days=", "figsize=", "image=")
+        df = self.spot(None)
+        date = self.shell.user_ns['data'].index[-int(opts.get('days', 1))]
+        data = self.shell.user_ns['data'].loc[date]
+        data.index = data.index.str.slice(0, 6)
+        data = data[~data.index.duplicated(keep='first')]
+
+        if int(opts.get('days', 1)) > 1:
+            price = self.get_price("close", date, date, False).iloc[-1]
+            price.index = price.index.str.slice(0, 6)
+            price = price.loc[~price.index.duplicated(keep='first')]
+            df['change_rate'] = (df['latest_price'] / price - 1) * 100
+
+        pd.concat([data, df["change_rate"]], axis=1,
+            keys=[name, "return"]).plot(kind='scatter', x=name, y='return', 
+            figsize=(int(opts.get('figsize', 20)), int(int(opts.get('figsize', 20)) / 2)))
+        plt.show()
+        if isinstance(opts.get('image'), str):
+            plt.savefig(opts['image'])
+        plt.close()
 
 
 class FactorPrompt(Prompts):
