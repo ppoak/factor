@@ -1,7 +1,11 @@
 import quool
 import factor
 import datetime
-from IPython.core.magic import (magics_class, line_magic, Magics)
+import squarify
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.core.magic import magics_class, line_magic, Magics
 from IPython.terminal.prompts import Prompts, Token
 
 
@@ -13,6 +17,12 @@ class FactorMagics(Magics):
         self.logger = quool.Logger("dashboard")
         self._quotes_path = "./data/quotes-day"
         self._factor_path = "./data/factor"
+        self._proxy_path = "./data/proxy"
+        self.proxies = self.proxy_table.read()
+
+    @property
+    def proxy_table(self):
+        return quool.FrameTable(self._proxy_path)
 
     @property
     def factor_table(self):
@@ -132,25 +142,63 @@ class FactorMagics(Magics):
             opts.get('ngroup', 10), opts.get('commission', 0.002), opts.get('n_jobs', -1),
             opts.get('image', True), opts.get('result')
         )
-
-
-@magics_class
-class FetcherMagics(Magics):
-
-    def __init__(self, shell=None, **kwargs):
-        super().__init__(shell, **kwargs)
-        self._proxy_path = "./data/proxy"
-        self.proxies = self.proxy_table.read()
-
-    @property
-    def proxy_table(self):
-        return quool.FrameTable(self._proxy_path)
-
+    
     @line_magic
     def spot(self, line):
         self.shell.user_ns['spot'] = quool.get_spot_data(
             self.proxies[['http']].to_dict(orient='records'))
         return self.shell.user_ns['spot']
+    
+    @line_magic
+    def heatmap(self, line):
+        """Usage: %heatmap [sort_by] [days] [figsize] [character] [image]
+
+        sort_by: select which field to sort, default to circulating_market_cap;
+        days: compute n-day return, default None to return to yesterday-close;
+        figsize: the size of the rectangle, default to 20;
+        character: how many names will be labelled on the heatmap, default to 30;
+        image: path to save the image, default to None;
+        """
+        opts, _ = self.parse_options(line, "", "sort_by=", "days=", "figsize=", "character=", "image=")
+        df = self.shell.user_ns.get('spot', self.spot(None))
+        df = df[["change_rate", "circulating_market_cap", "name"]].copy()
+        data = self.shell.user_ns.get('data')
+        if data is not None:
+            data = data.iloc[-1]
+            data.index = data.index.str.slice(0, 6)
+            data = data[~data.index.duplicated(keep='first')]
+            data.name = self.shell.user_ns['name']
+            data += abs(data.min())
+            df = pd.concat([df, data], axis=1, join='inner')
+            df = df[df != 0].dropna(subset=data.name)
+        df = df.loc[df.index.str.startswith("0") | df.index.str.startswith("3") | df.index.str.startswith("6")]
+        df = df[df["change_rate"] <= 20]
+        df = df.sort_values(by=opts.get('sort_by', 'circulating_market_cap'), ascending=False)
+        df.iloc[int(opts.get('character', 30)):, df.columns.get_indexer_for(['name'])[0]] = ''
+        colors = pd.Series(dict([
+                (-20, "#00FF00"), 
+                (-15, "#00E000"), 
+                (-10, "#00D000"), (-9, "#00C000"), 
+                (-7, "#00B000"), (-6, "#00A000"), (-5, "#009C00"), (-4, "#007C00"), 
+                (-3, "#005C00"), (-2, "#003C00"), (-1, "#002C00"), 
+                (0, "#000000"),
+                (1, "#2C0000"), (2, "#3C0000"), (3, "#5C0000"), (4, "#7C0000"), 
+                (5, "#9C0000"), (6, "#A00000"), (7, "#B00000"), 
+                (9, "#C00000"), (10, "#D00000"), 
+                (15, "#E00000"), 
+                (20, "#FF0000")
+            ]))
+        colors = df["change_rate"].map(lambda x: colors[colors.index <= x].iloc[-1])
+        figsize = int(opts.get('figsize', 20))
+        plt.figure(figsize=(figsize, figsize))
+        squarify.plot(sizes=df[opts.get('sort_by', 'circulating_market_cap')], label=df["name"], 
+            color=colors, alpha=0.7, text_kwargs=dict(fontsize=int(figsize / 2)))
+        plt.axis('off')
+        plt.show()
+        if opts.get('image', False):
+            plt.savefig(opts['image'])
+        plt.close()
+        return df
 
 
 class FactorPrompt(Prompts):
@@ -167,4 +215,3 @@ class FactorPrompt(Prompts):
 
 def load_ipython_extension(ipython):
     ipython.register_magics(FactorMagics)
-    ipython.register_magics(FetcherMagics)
