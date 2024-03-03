@@ -2,6 +2,7 @@ import quool
 import factor
 import datetime
 import squarify
+import importlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -45,8 +46,25 @@ class FactorMagics(Magics):
         self._proxy_path = line
     
     @line_magic
-    def get_factor(self, line):
+    def get_name(self, line):
         return self.factor_table.columns
+    
+    @line_magic
+    def get_factor(self, line):
+        """Usage: %get_factor [start] [stop] module.name
+
+        start: the start date, default to 20100101
+        stop: the start date, default to today
+        module: where the factor definition located
+        name: the factor name
+        """
+        opts, args = self.parse_options(line, "", "start=", "stop=")
+        module, name = args.split('.')
+        self.shell.user_ns['name'] = name
+        return getattr(importlib.import_module(module), 'get_' + name)(
+            opts.get('start', '20100101'), 
+            opts.get('stop', datetime.datetime.today().strftime(f"%Y-%m-%d"))
+        )
     
     @line_magic
     def load_factor(self, line):
