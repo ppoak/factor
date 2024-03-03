@@ -37,8 +37,10 @@ c = get_config()  #noqa
 c.InteractiveShellApp.exec_lines = [
     "%load_ext autoreload",
     "%autoreload 2",
+    "import quool",
     "import numpy as np",
     "import pandas as pd",
+    "import matplotlib.pyplot as plt",
     "from factor import *"
 ]
 
