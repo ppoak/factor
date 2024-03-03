@@ -103,13 +103,15 @@ def save_data(
 ):
     table = quool.PanelTable(uri, 
         code_level=code_level, date_level=date_level)
-    if isinstance(data, pd.DataFrame):
+    if isinstance(data, pd.DataFrame) and data.index.nlevels == 1:
         data = data.stack(dropna=True).swaplevel()
         data.index.names = [code_level, date_level]
-    data.name = name
-    if name in table.columns:
+    data = data.to_frame(name)
+    update_data = data[data.columns[data.columns.isin(table.columns)]]
+    add_data = data[data.columns[~data.columns.isin(table.columns)]]
+    if not update_data.empty:
         table.update(data)
-    else:
+    if not add_data.empty:
         table.add(data)
 
 def zscore(df: pd.DataFrame):
