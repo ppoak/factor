@@ -39,6 +39,10 @@ class FactorMagics(Magics):
     @line_magic
     def set_factor_path(self, line):
         self._factor_path = line
+
+    @line_magic
+    def set_proxy_path(self, line):
+        self._proxy_path = line
     
     @line_magic
     def get_factor(self, line):
