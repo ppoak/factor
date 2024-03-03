@@ -20,7 +20,7 @@ CODE_LEVEL = 'orderbook_id'
 def get_tail_volume_percent(start: str, stop: str) -> pd.DataFrame:
     def _get(date: pd.Timestamp):
         data = ft.get_data(QTM_URI, "volume", start=date, stop=date + pd.Timedelta(days=1))
-        tail_vol = data.between_time("14:30", "14:57")
+        tail_vol = data.between_time("14:30", "14:57").sum()
         day_vol = data.sum()
         res = tail_vol / day_vol
         res.name = date
